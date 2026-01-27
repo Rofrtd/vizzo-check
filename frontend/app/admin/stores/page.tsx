@@ -4,6 +4,10 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
 import { api } from "@/lib/api";
+import dynamic from "next/dynamic";
+
+// Dynamically import map component to avoid SSR issues
+const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap"), { ssr: false });
 
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
@@ -20,7 +24,6 @@ export default function StoresPage() {
     address: "",
     gps_latitude: "",
     gps_longitude: "",
-    radius_meters: "50",
     shelf_layout_pdf_url: "",
     product_category: "",
     contacts: [] as Array<{ name: string; phone: string; role: string }>,
@@ -62,7 +65,6 @@ export default function StoresPage() {
         address: store.address || "",
         gps_latitude: store.gps_latitude?.toString() || "",
         gps_longitude: store.gps_longitude?.toString() || "",
-        radius_meters: store.radius_meters?.toString() || "50",
         shelf_layout_pdf_url: store.shelf_layout_pdf_url || "",
         product_category: store.product_category || "",
         contacts: store.contacts || [],
@@ -88,7 +90,6 @@ export default function StoresPage() {
       address: "",
       gps_latitude: "",
       gps_longitude: "",
-      radius_meters: "50",
       shelf_layout_pdf_url: "",
       product_category: "",
       contacts: [],
@@ -126,12 +127,19 @@ export default function StoresPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    
+    // Validate GPS coordinates
+    if (!formData.gps_latitude || !formData.gps_longitude) {
+      alert("Por favor, selecione a localização no mapa ou use o botão 'Usar Minha Localização Atual'");
+      return;
+    }
+
     try {
       const submitData = {
         ...formData,
         gps_latitude: parseFloat(formData.gps_latitude),
         gps_longitude: parseFloat(formData.gps_longitude),
-        radius_meters: parseInt(formData.radius_meters),
+        radius_meters: 200, // Sempre fixo em 200 metros
       };
 
       if (editing) {
@@ -181,22 +189,26 @@ export default function StoresPage() {
     });
   }
 
+  function handleLocationSelect(lat: number, lng: number) {
+    setFormData({
+      ...formData,
+      gps_latitude: lat.toString(),
+      gps_longitude: lng.toString(),
+    });
+  }
+
   async function getCurrentLocation() {
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         (position) => {
-          setFormData({
-            ...formData,
-            gps_latitude: position.coords.latitude.toString(),
-            gps_longitude: position.coords.longitude.toString(),
-          });
+          handleLocationSelect(position.coords.latitude, position.coords.longitude);
         },
         (error) => {
-          alert("Failed to get location: " + error.message);
+          alert("Falha ao obter localização: " + error.message);
         },
       );
     } else {
-      alert("Geolocation is not supported by this browser.");
+      alert("Geolocalização não é suportada por este navegador.");
     }
   }
 
@@ -259,7 +271,7 @@ export default function StoresPage() {
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-bold mb-4">
-                {editing ? "Edit Store" : "New Store"}
+                {editing ? "Editar Loja" : "Nova Loja"}
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -325,13 +337,13 @@ export default function StoresPage() {
                     }
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
-                    <option value="retail">Retail</option>
-                    <option value="wholesale">Wholesale</option>
+                    <option value="retail">Varejo</option>
+                    <option value="wholesale">Atacado</option>
                   </select>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Address
+                    Endereço
                   </label>
                   <input
                     type="text"
@@ -343,72 +355,32 @@ export default function StoresPage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      GPS Latitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.gps_latitude}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          gps_latitude: e.target.value,
-                        })
-                      }
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      GPS Longitude
-                    </label>
-                    <input
-                      type="number"
-                      step="any"
-                      required
-                      value={formData.gps_longitude}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          gps_longitude: e.target.value,
-                        })
-                      }
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Localização GPS
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Clique no mapa para selecionar a localização da loja. Você também pode arrastar o marcador para ajustar.
+                  </p>
+                  <LocationPickerMap
+                    lat={formData.gps_latitude ? parseFloat(formData.gps_latitude) : null}
+                    lng={formData.gps_longitude ? parseFloat(formData.gps_longitude) : null}
+                    onLocationSelect={handleLocationSelect}
+                    height="400px"
+                  />
+                  <button
+                    type="button"
+                    onClick={getCurrentLocation}
+                    className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  >
+                    <span>📍</span>
+                    Usar Minha Localização Atual
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={getCurrentLocation}
-                  className="text-sm text-blue-600 hover:text-blue-800"
-                >
-                  📍 Use Current Location
-                </button>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-medium text-gray-700">
-                      Radius (meters)
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={formData.radius_meters}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          radius_meters: e.target.value,
-                        })
-                      }
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Product Category
+                      Categoria do Produto
                     </label>
                     <input
                       type="text"
@@ -425,7 +397,7 @@ export default function StoresPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Shelf Layout PDF URL
+                    URL do PDF do Layout da Prateleira
                   </label>
                   <input
                     type="url"
@@ -441,13 +413,13 @@ export default function StoresPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Contacts
+                    Contatos
                   </label>
                   {formData.contacts.map((contact, index) => (
                     <div key={index} className="grid grid-cols-4 gap-2 mb-2">
                       <input
                         type="text"
-                        placeholder="Name"
+                        placeholder="Nome"
                         value={contact.name}
                         onChange={(e) =>
                           updateContact(index, "name", e.target.value)
@@ -456,7 +428,7 @@ export default function StoresPage() {
                       />
                       <input
                         type="tel"
-                        placeholder="Phone"
+                        placeholder="Telefone"
                         value={contact.phone}
                         onChange={(e) =>
                           updateContact(index, "phone", e.target.value)
@@ -465,7 +437,7 @@ export default function StoresPage() {
                       />
                       <input
                         type="text"
-                        placeholder="Role"
+                        placeholder="Cargo"
                         value={contact.role}
                         onChange={(e) =>
                           updateContact(index, "role", e.target.value)
@@ -477,7 +449,7 @@ export default function StoresPage() {
                         onClick={() => removeContact(index)}
                         className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
                       >
-                        Remove
+                        Remover
                       </button>
                     </div>
                   ))}
@@ -486,7 +458,7 @@ export default function StoresPage() {
                     onClick={addContact}
                     className="text-sm text-blue-600 hover:text-blue-800"
                   >
-                    + Add Contact
+                    + Adicionar Contato
                   </button>
                 </div>
                 <div className="flex space-x-2 pt-4">
@@ -494,14 +466,14 @@ export default function StoresPage() {
                     type="submit"
                     className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
                   >
-                    Save
+                    Salvar
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowForm(false)}
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                   >
-                    Cancel
+                    Cancelar
                   </button>
                 </div>
               </form>

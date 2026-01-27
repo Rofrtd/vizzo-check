@@ -36,7 +36,7 @@ export async function createStore(req: AuthRequest, res: Response) {
       address,
       gps_latitude,
       gps_longitude,
-      radius_meters: radius_meters || 50,
+      radius_meters: radius_meters || 200,
       shelf_layout_pdf_url,
       product_category
     })
