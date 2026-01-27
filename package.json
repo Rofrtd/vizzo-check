@@ -1,0 +1,19 @@
+{
+  "name": "vizzocheck",
+  "version": "0.1.0",
+  "private": true,
+  "workspaces": [
+    "backend",
+    "frontend",
+    "shared"
+  ],
+  "scripts": {
+    "dev": "bun run --filter backend dev & bun run --filter frontend dev",
+    "build": "bun run --filter shared build && bun run --filter backend build && bun run --filter frontend build",
+    "typecheck": "bun run --filter shared typecheck && bun run --filter backend typecheck && bun run --filter frontend typecheck"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}
