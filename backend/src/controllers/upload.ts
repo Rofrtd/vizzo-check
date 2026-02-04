@@ -3,6 +3,7 @@ import { Response } from 'express';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { uploadImage } from '../services/cloudStorage.js';
+import { processImage } from '../services/imageProcessing.js';
 import { supabase } from '../lib/supabase.js';
 
 function buildVisitPhotoKey(
@@ -35,7 +36,8 @@ export async function uploadPhoto(req: AuthRequest, res: Response) {
   try {
     const ext = path.extname(file.originalname);
     const key = buildVisitPhotoKey(agencyId, visit_id, product_id, type, ext);
-    const url = await uploadImage(file.buffer, file.mimetype, key);
+    const { buffer, mimetype } = await processImage(file.buffer, file.mimetype);
+    const url = await uploadImage(buffer, mimetype, key);
     res.json({ url });
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : 'Unknown error';
@@ -70,7 +72,8 @@ export async function uploadProductPhoto(req: AuthRequest, res: Response) {
   try {
     const ext = path.extname(file.originalname);
     const key = `${agencyId}/products/${product_id}/product-${Date.now()}${ext}`;
-    const url = await uploadImage(file.buffer, file.mimetype, key);
+    const { buffer, mimetype } = await processImage(file.buffer, file.mimetype);
+    const url = await uploadImage(buffer, mimetype, key);
 
     await supabase
       .from('products')
@@ -111,7 +114,8 @@ export async function uploadBrandLogo(req: AuthRequest, res: Response) {
   try {
     const ext = path.extname(file.originalname);
     const key = `${agencyId}/brands/${brand_id}/logo-${Date.now()}${ext}`;
-    const url = await uploadImage(file.buffer, file.mimetype, key);
+    const { buffer, mimetype } = await processImage(file.buffer, file.mimetype);
+    const url = await uploadImage(buffer, mimetype, key);
 
     await supabase
       .from('brands')
@@ -152,7 +156,8 @@ export async function uploadStoreLogo(req: AuthRequest, res: Response) {
   try {
     const ext = path.extname(file.originalname);
     const key = `${agencyId}/stores/${store_id}/logo-${Date.now()}${ext}`;
-    const url = await uploadImage(file.buffer, file.mimetype, key);
+    const { buffer, mimetype } = await processImage(file.buffer, file.mimetype);
+    const url = await uploadImage(buffer, mimetype, key);
 
     await supabase
       .from('stores')
@@ -204,7 +209,8 @@ export async function uploadPromoterPhoto(req: AuthRequest, res: Response) {
   try {
     const ext = path.extname(file.originalname);
     const key = `${agencyId}/promoters/${promoter_id}/photo-${Date.now()}${ext}`;
-    const url = await uploadImage(file.buffer, file.mimetype, key);
+    const { buffer, mimetype } = await processImage(file.buffer, file.mimetype);
+    const url = await uploadImage(buffer, mimetype, key);
 
     await supabase
       .from('promoters')
