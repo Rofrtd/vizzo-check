@@ -523,7 +523,7 @@ export default function FinancialPage() {
                           {item.promoter_email}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                          {item.promoter_phone || "N/A"}
+                          {item.promoter_phone || "N/D"}
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                           {item.total_visits}

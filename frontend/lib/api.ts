@@ -302,6 +302,10 @@ export class ApiClient {
     return this.request(`/api/reports/planned-visits${queryString ? `?${queryString}` : ""}`);
   }
 
+  async getBrandsWithoutAllocations() {
+    return this.request("/api/reports/brands-without-allocations");
+  }
+
   // Upload
   async uploadPhoto(
     file: File,
@@ -428,6 +432,56 @@ export class ApiClient {
     }
 
     return response.json();
+  }
+
+  // Allocation methods
+  async getAllocations(filters?: { promoter_id?: string; brand_id?: string; store_id?: string }) {
+    const queryParams = new URLSearchParams();
+    if (filters?.promoter_id) queryParams.append('promoter_id', filters.promoter_id);
+    if (filters?.brand_id) queryParams.append('brand_id', filters.brand_id);
+    if (filters?.store_id) queryParams.append('store_id', filters.store_id);
+    
+    const query = queryParams.toString();
+    return this.request(`/api/allocations${query ? `?${query}` : ''}`);
+  }
+
+  async getAllocation(id: string) {
+    return this.request(`/api/allocations/${id}`);
+  }
+
+  async createAllocation(data: {
+    promoter_id: string;
+    brand_id: string;
+    store_id: string;
+    days_of_week: number[];
+    frequency_per_week: number;
+    active?: boolean;
+  }) {
+    return this.request("/api/allocations", {
+      method: "POST",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAllocation(id: string, data: {
+    days_of_week?: number[];
+    frequency_per_week?: number;
+    active?: boolean;
+  }) {
+    return this.request(`/api/allocations/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAllocation(id: string) {
+    return this.request(`/api/allocations/${id}`, {
+      method: "DELETE",
+    });
+  }
+
+  async getAllocationSuggestions(promoterId: string, brandId: string, storeId: string, frequencyPerWeek: number = 1) {
+    return this.request(`/api/allocations/suggestions/${promoterId}/${brandId}/${storeId}?frequency=${frequencyPerWeek}`);
   }
 }
 

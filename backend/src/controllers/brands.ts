@@ -16,7 +16,37 @@ export async function listBrands(req: AuthRequest, res: Response) {
     throw new AppError(`Failed to fetch brands: ${error.message}`, 500);
   }
 
-  res.json(brands || []);
+  if (!brands || brands.length === 0) {
+    return res.json([]);
+  }
+
+  // Get stores for each brand with visit_frequency
+  const brandIds = brands.map(b => b.id);
+  const { data: brandStores } = await supabase
+    .from('brand_stores')
+    .select('brand_id, store_id, visit_frequency, stores(*)')
+    .in('brand_id', brandIds);
+
+  // Group stores by brand
+  const storesByBrand = new Map<string, any[]>();
+  (brandStores || []).forEach((bs: any) => {
+    if (!storesByBrand.has(bs.brand_id)) {
+      storesByBrand.set(bs.brand_id, []);
+    }
+    storesByBrand.get(bs.brand_id)!.push({
+      store_id: bs.store_id,
+      visit_frequency: bs.visit_frequency || 1,
+      stores: bs.stores
+    });
+  });
+
+  // Add stores to each brand
+  const brandsWithStores = brands.map(brand => ({
+    ...brand,
+    stores: storesByBrand.get(brand.id) || []
+  }));
+
+  res.json(brandsWithStores);
 }
 
 export async function createBrand(req: AuthRequest, res: Response) {
@@ -54,11 +84,25 @@ export async function createBrand(req: AuthRequest, res: Response) {
   }
 
   // Assign stores if provided
+  // Support both old format (array of IDs) and new format (array of objects with store_id and visit_frequency)
   if (store_ids && Array.isArray(store_ids)) {
-    const storeAssignments = store_ids.map((store_id: string) => ({
-      brand_id: brand.id,
-      store_id
-    }));
+    const storeAssignments = store_ids.map((item: any) => {
+      if (typeof item === 'string') {
+        // Old format: just store_id
+        return {
+          brand_id: brand.id,
+          store_id: item,
+          visit_frequency: brand.visit_frequency || 1
+        };
+      } else {
+        // New format: object with store_id and visit_frequency
+        return {
+          brand_id: brand.id,
+          store_id: item.store_id || item.id,
+          visit_frequency: item.visit_frequency || brand.visit_frequency || 1
+        };
+      }
+    });
     await supabase.from('brand_stores').insert(storeAssignments);
   }
 
@@ -86,7 +130,7 @@ export async function getBrand(req: AuthRequest, res: Response) {
     supabase.from('products').select('*').eq('brand_id', id),
     supabase
       .from('brand_stores')
-      .select('store_id, stores(*)')
+      .select('store_id, visit_frequency, stores(*)')
       .eq('brand_id', id)
   ]);
 
@@ -94,7 +138,11 @@ export async function getBrand(req: AuthRequest, res: Response) {
     ...brand,
     contacts: contacts.data || [],
     products: products.data || [],
-    stores: stores.data || []
+    stores: (stores.data || []).map((bs: any) => ({
+      store_id: bs.store_id,
+      visit_frequency: bs.visit_frequency || brand.visit_frequency || 1,
+      stores: bs.stores
+    }))
   });
 }
 
@@ -128,6 +176,34 @@ export async function updateBrand(req: AuthRequest, res: Response) {
 
   if (error) {
     throw new AppError(`Failed to update brand: ${error.message}`, 500);
+  }
+
+  // Update store assignments if provided
+  if (updates.store_ids !== undefined) {
+    // Delete existing assignments
+    await supabase.from('brand_stores').delete().eq('brand_id', id);
+    
+    // Add new assignments
+    if (Array.isArray(updates.store_ids) && updates.store_ids.length > 0) {
+      const storeAssignments = updates.store_ids.map((item: any) => {
+        if (typeof item === 'string') {
+          // Old format: just store_id
+          return {
+            brand_id: id,
+            store_id: item,
+            visit_frequency: updated.visit_frequency || 1
+          };
+        } else {
+          // New format: object with store_id and visit_frequency
+          return {
+            brand_id: id,
+            store_id: item.store_id || item.id,
+            visit_frequency: item.visit_frequency || updated.visit_frequency || 1
+          };
+        }
+      });
+      await supabase.from('brand_stores').insert(storeAssignments);
+    }
   }
 
   res.json(updated);

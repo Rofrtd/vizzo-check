@@ -10,9 +10,7 @@ export default function AdminDashboard() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState({
-    totalVisits: 0,
-    activePromoters: 0,
-    pendingReviews: 0
+    activePromoters: 0
   });
   const [loading, setLoading] = useState(true);
   const [visits, setVisits] = useState<any[]>([]);
@@ -20,6 +18,7 @@ export default function AdminDashboard() {
   const [stores, setStores] = useState<any[]>([]);
   const [brands, setBrands] = useState<any[]>([]);
   const [plannedVisits, setPlannedVisits] = useState<any>(null);
+  const [brandsWithoutAllocations, setBrandsWithoutAllocations] = useState<any[]>([]);
   
   // Helper to format date as YYYY-MM-DD in local timezone
   const formatDateLocal = (date: Date): string => {
@@ -94,10 +93,11 @@ export default function AdminDashboard() {
       if (filters.status) queryParams.status = filters.status;
 
       // Use filter dates for planned visits calculation
-      const [visitsData, promotersData, plannedData] = await Promise.all([
+      const [visitsData, promotersData, plannedData, brandsWithoutAllocs] = await Promise.all([
         api.listVisits(queryParams),
         api.listPromoters(),
-        api.getPlannedVisits(filters.startDate, filters.endDate)
+        api.getPlannedVisits(filters.startDate, filters.endDate),
+        api.getBrandsWithoutAllocations()
       ]);
       
       const visits = (visitsData as any[]) || [];
@@ -105,10 +105,9 @@ export default function AdminDashboard() {
       
       setVisits(visits);
       setPlannedVisits(plannedData as any);
+      setBrandsWithoutAllocations(brandsWithoutAllocs as any[] || []);
       setStats({
-        totalVisits: visits.length || 0,
-        activePromoters: promoters.filter((p: any) => p.active).length || 0,
-        pendingReviews: visits.filter((v: any) => v.status === 'completed').length || 0
+        activePromoters: promoters.filter((p: any) => p.active).length || 0
       });
     } catch (error) {
       console.error('Failed to load stats:', error);
@@ -322,24 +321,6 @@ export default function AdminDashboard() {
               <div className="p-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Total de Visitas</p>
-                    <p className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-blue-800 bg-clip-text text-transparent">
-                      {stats.totalVisits}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg hover:scale-105 transition-all duration-300 group">
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
                     <p className="text-sm font-medium text-gray-600 mb-1">Promotores Ativos</p>
                     <p className="text-4xl font-bold bg-gradient-to-r from-green-600 to-emerald-600 bg-clip-text text-transparent">
                       {stats.activePromoters}
@@ -348,24 +329,6 @@ export default function AdminDashboard() {
                   <div className="p-4 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl shadow-lg group-hover:scale-110 transition-transform">
                     <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
-                    </svg>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden hover:shadow-lg hover:scale-105 transition-all duration-300 group">
-              <div className="p-6">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm font-medium text-gray-600 mb-1">Revisões Pendentes</p>
-                    <p className="text-4xl font-bold bg-gradient-to-r from-yellow-600 to-orange-600 bg-clip-text text-transparent">
-                      {stats.pendingReviews}
-                    </p>
-                  </div>
-                  <div className="p-4 bg-gradient-to-br from-yellow-500 to-orange-500 rounded-xl shadow-lg group-hover:scale-110 transition-transform">
-                    <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                     </svg>
                   </div>
                 </div>
@@ -437,6 +400,40 @@ export default function AdminDashboard() {
                       <svg className="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
                       </svg>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* Alert for Pending Allocations */}
+          {brandsWithoutAllocations.length > 0 && (
+            <div className="mb-8">
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 rounded-lg shadow-sm">
+                <div className="flex items-start">
+                  <div className="flex-shrink-0">
+                    <svg className="h-5 w-5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                    </svg>
+                  </div>
+                  <div className="ml-3 flex-1">
+                    <h3 className="text-sm font-semibold text-yellow-800">
+                      Alocações Pendentes
+                    </h3>
+                    <div className="mt-2 text-sm text-yellow-700">
+                      <p>
+                        Existem <strong>{brandsWithoutAllocations.length}</strong> {brandsWithoutAllocations.length === 1 ? 'marca que precisa' : 'marcas que precisam'} de alocações mas não {brandsWithoutAllocations.length === 1 ? 'tem' : 'têm'} promotores alocados.
+                      </p>
+                    </div>
+                    <div className="mt-4">
+                      <a
+                        href="/admin/allocations"
+                        className="text-sm font-medium text-yellow-800 hover:text-yellow-900 underline"
+                      >
+                        Ver detalhes e criar alocações →
+                      </a>
                     </div>
                   </div>
                 </div>

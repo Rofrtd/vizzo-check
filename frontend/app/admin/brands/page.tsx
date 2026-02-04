@@ -16,14 +16,16 @@ export default function BrandsPage() {
   const [editing, setEditing] = useState<any>(null);
   const [formData, setFormData] = useState({
     name: "",
-    visit_frequency: "1",
     price_per_visit: "0",
     contacts: [] as Array<{ name: string; phone: string; role: string }>,
-    store_ids: [] as string[],
+    store_ids: [] as Array<
+      { store_id: string; visit_frequency?: number } | string
+    >,
     logo_url: "",
   });
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   const [stores, setStores] = useState<any[]>([]);
   const [selectedBrand, setSelectedBrand] = useState<any>(null);
   const [productForm, setProductForm] = useState({
@@ -35,6 +37,7 @@ export default function BrandsPage() {
   const [editingProduct, setEditingProduct] = useState<any>(null);
   const [showProductForm, setShowProductForm] = useState(false);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [savingProduct, setSavingProduct] = useState(false);
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== "agency_admin")) {
@@ -56,8 +59,8 @@ export default function BrandsPage() {
         api.listStores(),
       ]);
 
-      setBrands(brandsData);
-      setStores(storesData);
+      setBrands((brandsData as any[]) || []);
+      setStores((storesData as any[]) || []);
     } catch (error) {
       console.error("Failed to load data:", error);
     } finally {
@@ -67,15 +70,22 @@ export default function BrandsPage() {
 
   async function loadBrandDetails(id: string) {
     try {
-      const brand = await api.getBrand(id);
+      const brand = (await api.getBrand(id)) as any;
       setSelectedBrand(brand);
       setFormData({
-        name: brand.name || "",
-        visit_frequency: brand.visit_frequency?.toString() || "1",
-        price_per_visit: brand.price_per_visit?.toString() || "0",
-        contacts: brand.contacts || [],
-        store_ids: brand.stores?.map((s: any) => s.store_id) || [],
-        logo_url: brand.logo_url || "",
+        name: brand?.name || "",
+        price_per_visit: brand?.price_per_visit?.toString() || "0",
+        contacts: brand?.contacts || [],
+        store_ids:
+          brand?.stores?.map((bs: any) => {
+            const storeId = bs.store_id || bs.stores?.id;
+            const frequency = bs.visit_frequency || 1;
+            return {
+              store_id: storeId,
+              visit_frequency: frequency,
+            };
+          }) || [],
+        logo_url: brand?.logo_url || "",
       });
     } catch (error) {
       console.error("Failed to load brand:", error);
@@ -94,7 +104,6 @@ export default function BrandsPage() {
     setLogoFile(null);
     setFormData({
       name: "",
-      visit_frequency: "1",
       price_per_visit: "0",
       contacts: [],
       store_ids: [],
@@ -132,13 +141,14 @@ export default function BrandsPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSaving(true);
     try {
       if (editing) {
         await api.updateBrand(editing.id, formData);
       } else {
         // Criar marca primeiro
-        const newBrand = await api.createBrand(formData) as any;
-        
+        const newBrand = (await api.createBrand(formData)) as any;
+
         // Se houver arquivo de logo, fazer upload após criação
         if (logoFile && newBrand?.id) {
           try {
@@ -156,7 +166,9 @@ export default function BrandsPage() {
       setLogoFile(null);
       await loadData();
     } catch (error: any) {
-      alert(error.message || "Failed to save brand");
+      alert(error.message || "Erro ao salvar marca");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -198,7 +210,7 @@ export default function BrandsPage() {
   }
 
   async function handleDeleteProduct(productId: string) {
-    if (!confirm("Are you sure you want to delete this product?")) {
+    if (!confirm("Tem certeza que deseja deletar este produto?")) {
       return;
     }
     try {
@@ -206,7 +218,7 @@ export default function BrandsPage() {
       await loadBrandDetails(selectedBrand!.id);
       await loadData();
     } catch (error: any) {
-      alert(error.message || "Failed to delete product");
+      alert(error.message || "Erro ao deletar produto");
     }
   }
 
@@ -238,7 +250,7 @@ export default function BrandsPage() {
         reader.readAsDataURL(file);
       }
     } catch (error: any) {
-      alert(error.message || "Failed to upload photo");
+      alert(error.message || "Erro ao enviar foto");
     } finally {
       setUploadingPhoto(false);
       e.target.value = ""; // Reset input
@@ -248,13 +260,14 @@ export default function BrandsPage() {
   async function handleSaveProductWithPhoto() {
     if (!selectedBrand) return;
 
+    setSavingProduct(true);
     try {
       let photoUrl = productForm.photo_url;
 
       // If photo_url is a data URL (preview), we need to upload it after creating the product
       if (photoUrl && photoUrl.startsWith("data:")) {
         // Create product first
-        const product = editingProduct
+        const product = (editingProduct
           ? await api.updateProduct(editingProduct.id, {
               name: productForm.name,
               code: productForm.code,
@@ -266,7 +279,7 @@ export default function BrandsPage() {
               code: productForm.code,
               description: productForm.description,
               photo_url: "",
-            });
+            })) as any;
 
         // Convert data URL to blob and upload
         const response = await fetch(photoUrl);
@@ -274,12 +287,12 @@ export default function BrandsPage() {
         const file = new File([blob], "product-photo.jpg", {
           type: "image/jpeg",
         });
-        const uploadResult = await api.uploadProductPhoto(file, product.id);
-        photoUrl = uploadResult.url;
+        const uploadResult = await api.uploadProductPhoto(file, (product as any).id);
+        photoUrl = (uploadResult as any).url;
 
         // Update product with photo URL
-        await api.updateProduct(product.id, {
-          ...product,
+        await api.updateProduct((product as any).id, {
+          ...(product as any),
           photo_url: photoUrl,
         });
       } else {
@@ -297,7 +310,7 @@ export default function BrandsPage() {
       await loadBrandDetails(selectedBrand.id);
       await loadData();
     } catch (error: any) {
-      alert(error.message || "Failed to save product");
+      alert(error.message || "Erro ao salvar produto");
     }
   }
 
@@ -358,7 +371,7 @@ export default function BrandsPage() {
           <div className="bg-white rounded-lg max-w-3xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-bold mb-4">
-                {editing ? "Edit Brand" : "New Brand"}
+                {editing ? "Editar Marca" : "Nova Marca"}
               </h2>
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
@@ -413,52 +426,33 @@ export default function BrandsPage() {
                     </div>
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Visit Frequency
-                    </label>
-                    <input
-                      type="number"
-                      required
-                      value={formData.visit_frequency}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          visit_frequency: e.target.value,
-                        })
-                      }
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700">
-                      Price per Visit
-                    </label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      required
-                      value={formData.price_per_visit}
-                      onChange={(e) =>
-                        setFormData({
-                          ...formData,
-                          price_per_visit: e.target.value,
-                        })
-                      }
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700">
+                    Preço por Visita
+                  </label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={formData.price_per_visit}
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        price_per_visit: e.target.value,
+                      })
+                    }
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                  />
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Contacts
+                    Contatos
                   </label>
                   {formData.contacts.map((contact, index) => (
                     <div key={index} className="grid grid-cols-4 gap-2 mb-2">
                       <input
                         type="text"
-                        placeholder="Name"
+                        placeholder="Nome"
                         value={contact.name}
                         onChange={(e) =>
                           updateContact(index, "name", e.target.value)
@@ -467,7 +461,7 @@ export default function BrandsPage() {
                       />
                       <input
                         type="tel"
-                        placeholder="Phone"
+                        placeholder="Telefone"
                         value={contact.phone}
                         onChange={(e) =>
                           updateContact(index, "phone", e.target.value)
@@ -476,7 +470,7 @@ export default function BrandsPage() {
                       />
                       <input
                         type="text"
-                        placeholder="Role"
+                        placeholder="Cargo"
                         value={contact.role}
                         onChange={(e) =>
                           updateContact(index, "role", e.target.value)
@@ -488,7 +482,7 @@ export default function BrandsPage() {
                         onClick={() => removeContact(index)}
                         className="px-3 py-2 bg-red-100 text-red-700 rounded hover:bg-red-200"
                       >
-                        Remove
+                        Remover
                       </button>
                     </div>
                   ))}
@@ -497,53 +491,123 @@ export default function BrandsPage() {
                     onClick={addContact}
                     className="text-sm text-blue-600 hover:text-blue-800"
                   >
-                    + Add Contact
+                    + Adicionar Contato
                   </button>
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stores
+                    Lojas (com frequência por loja)
                   </label>
-                  <div className="max-h-40 overflow-y-auto border rounded p-2">
-                    {stores.map((store) => (
-                      <label
-                        key={store.id}
-                        className="flex items-center space-x-2 py-1"
-                      >
-                        <input
-                          type="checkbox"
-                          checked={formData.store_ids.includes(store.id)}
-                          onChange={(e) => {
-                            if (e.target.checked) {
-                              setFormData({
-                                ...formData,
-                                store_ids: [...formData.store_ids, store.id],
-                              });
-                            } else {
-                              setFormData({
-                                ...formData,
-                                store_ids: formData.store_ids.filter(
-                                  (id) => id !== store.id,
-                                ),
-                              });
-                            }
-                          }}
-                        />
-                        <span>{store.chain_name}</span>
-                      </label>
-                    ))}
+                  <div className="max-h-60 overflow-y-auto border rounded p-2 space-y-2">
+                    {stores.map((store) => {
+                      const isSelected = formData.store_ids.some(
+                        (sid: any) =>
+                          (typeof sid === "string" ? sid : sid.store_id) ===
+                          store.id,
+                      );
+                      const selectedItem = formData.store_ids.find(
+                        (sid: any) =>
+                          (typeof sid === "string" ? sid : sid.store_id) ===
+                          store.id,
+                      );
+                      const currentFrequency =
+                        typeof selectedItem === "object"
+                          ? selectedItem.visit_frequency
+                          : 1;
+
+                      return (
+                        <div
+                          key={store.id}
+                          className="flex items-center gap-2 p-2 border rounded hover:bg-gray-50"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={(e) => {
+                              if (e.target.checked) {
+                                setFormData({
+                                  ...formData,
+                                  store_ids: [
+                                    ...formData.store_ids,
+                                    {
+                                      store_id: store.id,
+                                      visit_frequency: 1,
+                                    },
+                                  ],
+                                });
+                              } else {
+                                setFormData({
+                                  ...formData,
+                                  store_ids: formData.store_ids.filter(
+                                    (sid: any) =>
+                                      (typeof sid === "string"
+                                        ? sid
+                                        : sid.store_id) !== store.id,
+                                  ),
+                                });
+                              }
+                            }}
+                            className="flex-shrink-0"
+                          />
+                          <span className="flex-1">{store.chain_name}</span>
+                          {isSelected && (
+                            <div className="flex items-center gap-1">
+                              <label className="text-xs text-gray-600">
+                                Freq:
+                              </label>
+                              <input
+                                type="number"
+                                min={1}
+                                max={7}
+                                value={currentFrequency}
+                                onChange={(e) => {
+                                  const freq = parseInt(e.target.value) || 1;
+                                  setFormData({
+                                    ...formData,
+                                    store_ids: formData.store_ids.map(
+                                      (sid: any) => {
+                                        const storeId =
+                                          typeof sid === "string"
+                                            ? sid
+                                            : sid.store_id;
+                                        if (storeId === store.id) {
+                                          return {
+                                            store_id: store.id,
+                                            visit_frequency: freq,
+                                          };
+                                        }
+                                        return sid;
+                                      },
+                                    ),
+                                  });
+                                }}
+                                className="w-16 px-2 py-1 text-sm border border-gray-300 rounded"
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                              <span className="text-xs text-gray-500">
+                                x/semana
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    })}
                   </div>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Selecione as lojas e defina a frequência de visitas para
+                    cada uma
+                  </p>
                 </div>
                 {editing && selectedBrand && (
                   <div className="border-t pt-4 mt-4">
                     <div className="flex justify-between items-center mb-2">
-                      <h3 className="font-semibold">Products</h3>
+                      <h3 className="font-semibold">Produtos</h3>
                       <button
                         type="button"
                         onClick={handleNewProduct}
                         className="text-sm px-3 py-1 bg-green-600 text-white rounded hover:bg-green-700"
                       >
-                        + Add Product
+                        + Adicionar Produto
                       </button>
                     </div>
                     <div className="space-y-2 mb-4">
@@ -590,14 +654,14 @@ export default function BrandsPage() {
                               onClick={() => handleEditProduct(product)}
                               className="text-blue-600 hover:text-blue-800 text-sm"
                             >
-                              Edit
+                              Editar
                             </button>
                             <button
                               type="button"
                               onClick={() => handleDeleteProduct(product.id)}
                               className="text-red-600 hover:text-red-800 text-sm"
                             >
-                              Delete
+                              Deletar
                             </button>
                           </div>
                         </div>
@@ -605,7 +669,7 @@ export default function BrandsPage() {
                       {(!selectedBrand.products ||
                         selectedBrand.products.length === 0) && (
                         <p className="text-sm text-gray-500 text-center py-4">
-                          No products yet
+                          Nenhum produto cadastrado ainda
                         </p>
                       )}
                     </div>
@@ -614,16 +678,24 @@ export default function BrandsPage() {
                 <div className="flex space-x-2 pt-4">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    disabled={saving || uploadingLogo}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Save
+                    {saving || uploadingLogo ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        {uploadingLogo ? 'Enviando...' : 'Salvando...'}
+                      </>
+                    ) : (
+                      'Salvar'
+                    )}
                   </button>
                   <button
                     type="button"
                     onClick={() => setShowForm(false)}
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                   >
-                    Cancel
+                    Cancelar
                   </button>
                 </div>
               </form>
@@ -638,7 +710,7 @@ export default function BrandsPage() {
           <div className="bg-white rounded-lg max-w-2xl w-full max-h-[90vh] overflow-y-auto">
             <div className="p-6">
               <h2 className="text-xl font-bold mb-4">
-                {editingProduct ? "Edit Product" : "New Product"}
+                {editingProduct ? "Editar Produto" : "Novo Produto"}
               </h2>
               <form
                 onSubmit={(e) => {
@@ -649,7 +721,7 @@ export default function BrandsPage() {
               >
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Product Name *
+                    Nome do Produto *
                   </label>
                   <input
                     type="text"
@@ -663,7 +735,7 @@ export default function BrandsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Product Code *
+                    Código do Produto *
                   </label>
                   <input
                     type="text"
@@ -677,7 +749,7 @@ export default function BrandsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700">
-                    Description
+                    Descrição
                   </label>
                   <textarea
                     value={productForm.description}
@@ -693,7 +765,7 @@ export default function BrandsPage() {
                 </div>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Product Photo
+                    Foto do Produto
                   </label>
                   {productForm.photo_url && (
                     <div className="mb-2">
@@ -726,16 +798,23 @@ export default function BrandsPage() {
                     className="mt-1 block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-md file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
                   />
                   {uploadingPhoto && (
-                    <p className="text-sm text-gray-500 mt-1">Uploading...</p>
+                    <p className="text-sm text-gray-500 mt-1">Enviando...</p>
                   )}
                 </div>
                 <div className="flex space-x-2 pt-4">
                   <button
                     type="submit"
-                    disabled={uploadingPhoto}
-                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50"
+                    disabled={savingProduct || uploadingPhoto}
+                    className="px-4 py-2 bg-green-600 text-white rounded hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    {editingProduct ? "Update Product" : "Add Product"}
+                    {savingProduct || uploadingPhoto ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        {uploadingPhoto ? 'Enviando...' : 'Salvando...'}
+                      </>
+                    ) : (
+                      editingProduct ? 'Atualizar Produto' : 'Adicionar Produto'
+                    )}
                   </button>
                   <button
                     type="button"
@@ -751,7 +830,7 @@ export default function BrandsPage() {
                     }}
                     className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300"
                   >
-                    Cancel
+                    Cancelar
                   </button>
                 </div>
               </form>
@@ -809,24 +888,6 @@ export default function BrandsPage() {
                         />
                       </svg>
                       Nome
-                    </div>
-                  </th>
-                  <th className="px-6 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    <div className="flex items-center gap-2">
-                      <svg
-                        className="w-4 h-4 text-blue-500"
-                        fill="none"
-                        stroke="currentColor"
-                        viewBox="0 0 24 24"
-                      >
-                        <path
-                          strokeLinecap="round"
-                          strokeLinejoin="round"
-                          strokeWidth={2}
-                          d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"
-                        />
-                      </svg>
-                      Frequência de Visitas
                     </div>
                   </th>
                   <th className="px-6 py-2.5 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">
@@ -895,11 +956,6 @@ export default function BrandsPage() {
                           {brand.name}
                         </span>
                       </div>
-                    </td>
-                    <td className="px-6 py-2.5 whitespace-nowrap">
-                      <span className="text-sm text-gray-900 group-hover:text-blue-700 transition-colors">
-                        {brand.visit_frequency}
-                      </span>
                     </td>
                     <td className="px-6 py-2.5 whitespace-nowrap">
                       <span className="text-sm font-medium text-gray-900 group-hover:text-green-700 group-hover:font-semibold transition-all">

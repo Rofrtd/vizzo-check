@@ -31,6 +31,9 @@ export default function StoresPage() {
   });
   const [uploadingLogo, setUploadingLogo] = useState(false);
   const [logoFile, setLogoFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [citySearch, setCitySearch] = useState("");
+  const [searchingCity, setSearchingCity] = useState(false);
 
   useEffect(() => {
     if (!authLoading && (!user || user.role !== "agency_admin")) {
@@ -59,6 +62,7 @@ export default function StoresPage() {
   async function loadStoreDetails(id: string) {
     try {
       const store = await api.getStore(id);
+      setCitySearch(""); // Limpar busca de cidade ao carregar loja existente
       setFormData({
         chain_name: store.chain_name || "",
         type: store.type || "retail",
@@ -84,6 +88,7 @@ export default function StoresPage() {
   function handleNew() {
     setEditing(null);
     setLogoFile(null);
+    setCitySearch("");
     setFormData({
       chain_name: "",
       type: "retail",
@@ -109,7 +114,7 @@ export default function StoresPage() {
         const result = await api.uploadStoreLogo(file, editing.id);
         setFormData({ ...formData, logo_url: result.url });
       } catch (error: any) {
-        alert(error.message || "Failed to upload logo");
+        alert(error.message || "Erro ao enviar logo");
       } finally {
         setUploadingLogo(false);
       }
@@ -134,6 +139,7 @@ export default function StoresPage() {
       return;
     }
 
+    setSaving(true);
     try {
       const submitData = {
         ...formData,
@@ -165,7 +171,9 @@ export default function StoresPage() {
       setLogoFile(null);
       await loadData();
     } catch (error: any) {
-      alert(error.message || "Failed to save store");
+      alert(error.message || "Erro ao salvar loja");
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -189,12 +197,167 @@ export default function StoresPage() {
     });
   }
 
+  async function reverseGeocode(lat: number, lng: number) {
+    try {
+      // Usar Nominatim para reverse geocoding (coordenadas -> endereço)
+      const response = await fetch(
+        `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&countrycodes=br`,
+        {
+          headers: {
+            "User-Agent": "VizzoCheck/1.0"
+          }
+        }
+      );
+      
+      const data = await response.json();
+      
+      if (data && data.address) {
+        const addr = data.address;
+        const addressParts = [];
+        
+        // Construir endereço completo
+        if (addr.road || addr.house_number) {
+          const street = addr.road || '';
+          const number = addr.house_number || '';
+          if (street) addressParts.push(number ? `${street}, ${number}` : street);
+        }
+        
+        if (addr.suburb || addr.neighbourhood) {
+          addressParts.push(addr.suburb || addr.neighbourhood);
+        }
+        
+        if (addr.city || addr.town || addr.village) {
+          addressParts.push(addr.city || addr.town || addr.village);
+        }
+        
+        if (addr.state) {
+          addressParts.push(addr.state);
+        }
+        
+        const fullAddress = addressParts.join(', ');
+        
+        if (fullAddress) {
+          setFormData({
+            ...formData,
+            address: fullAddress,
+            gps_latitude: lat.toString(),
+            gps_longitude: lng.toString(),
+          });
+        } else {
+          // Se não conseguir construir endereço completo, usar display_name
+          setFormData({
+            ...formData,
+            address: data.display_name || formData.address,
+            gps_latitude: lat.toString(),
+            gps_longitude: lng.toString(),
+          });
+        }
+      } else {
+        // Se não conseguir fazer reverse geocoding, apenas atualizar coordenadas
+        setFormData({
+          ...formData,
+          gps_latitude: lat.toString(),
+          gps_longitude: lng.toString(),
+        });
+      }
+    } catch (error) {
+      console.error("Erro ao fazer reverse geocoding:", error);
+      // Em caso de erro, apenas atualizar coordenadas
+      setFormData({
+        ...formData,
+        gps_latitude: lat.toString(),
+        gps_longitude: lng.toString(),
+      });
+    }
+  }
+
   function handleLocationSelect(lat: number, lng: number) {
-    setFormData({
-      ...formData,
-      gps_latitude: lat.toString(),
-      gps_longitude: lng.toString(),
-    });
+    // Fazer reverse geocoding para obter endereço
+    reverseGeocode(lat, lng);
+  }
+
+  async function searchCity() {
+    const searchQuery = citySearch.trim();
+    
+    if (!searchQuery || searchQuery.length < 3) {
+      alert("Digite pelo menos 3 caracteres para buscar");
+      return;
+    }
+
+    try {
+      setSearchingCity(true);
+      
+      // Buscar no Brasil usando Nominatim
+      // Aceita: nome da loja + bairro, nome da loja + cidade, ou apenas cidade
+      let query = searchQuery.includes(',') 
+        ? `${searchQuery}, Brasil`
+        : `${searchQuery}, Brasil`;
+      
+      let response = await fetch(
+        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&countrycodes=br`,
+        {
+          headers: {
+            "User-Agent": "VizzoCheck/1.0"
+          }
+        }
+      );
+      
+      let data = await response.json();
+      
+      if (data && data.length > 0) {
+        // Preferir resultados que são estabelecimentos comerciais, bairros ou cidades
+        const preferredResult = data.find((item: any) => 
+          item.type === 'commercial' ||
+          item.type === 'retail' ||
+          item.type === 'shop' ||
+          item.class === 'shop' ||
+          item.class === 'amenity'
+        ) || data.find((item: any) => 
+          item.type === 'city' || 
+          item.type === 'administrative' ||
+          item.class === 'place'
+        ) || data[0];
+        
+        const lat = parseFloat(preferredResult.lat);
+        const lon = parseFloat(preferredResult.lon);
+        const displayName = preferredResult.display_name;
+        
+        if (!isNaN(lat) && !isNaN(lon)) {
+          // Usar o display_name completo ou formatar melhor
+          const parts = displayName.split(',');
+          let address = '';
+          
+          // Se tiver muitas partes, pegar as primeiras (nome, bairro, cidade, estado)
+          if (parts.length >= 3) {
+            // Pegar nome/bairro, cidade e estado
+            address = parts.slice(0, Math.min(3, parts.length - 1)).join(', ').trim();
+          } else if (parts.length >= 2) {
+            // Cidade e estado
+            address = parts[0].trim() + ', ' + parts[parts.length - 2].trim();
+          } else {
+            address = displayName.split(',')[0];
+          }
+          
+          // Atualizar endereço
+          setFormData({
+            ...formData,
+            address: address || displayName.split(',')[0],
+          });
+          
+          // Atualizar mapa com coordenadas encontradas
+          handleLocationSelect(lat, lon);
+        } else {
+          alert("Não foi possível encontrar coordenadas para esta busca");
+        }
+      } else {
+        alert("Localização não encontrada. Tente buscar com: nome da loja + bairro ou cidade (ex: Supermercado X, Centro, São Paulo)");
+      }
+    } catch (error: any) {
+      console.error("Erro ao buscar localização:", error);
+      alert("Erro ao buscar localização. Tente novamente.");
+    } finally {
+      setSearchingCity(false);
+    }
   }
 
   async function getCurrentLocation() {
@@ -342,6 +505,44 @@ export default function StoresPage() {
                   </select>
                 </div>
                 <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Buscar Cidade
+                  </label>
+                  <p className="text-xs text-gray-500 mb-2">
+                    Digite o nome da loja + bairro ou cidade para posicionar o mapa. Você pode ajustar o pino manualmente depois.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Ex: Supermercado X, Centro, São Paulo ou Canelinha, SC"
+                      value={citySearch}
+                      onChange={(e) => setCitySearch(e.target.value)}
+                      onKeyPress={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          searchCity();
+                        }
+                      }}
+                      className="flex-1 px-3 py-2 border border-gray-300 rounded-md"
+                    />
+                    <button
+                      type="button"
+                      onClick={searchCity}
+                      disabled={searchingCity || !citySearch.trim()}
+                      className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center gap-2"
+                    >
+                      {searchingCity ? (
+                        <>
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                          <span>Buscando...</span>
+                        </>
+                      ) : (
+                        <span>Buscar</span>
+                      )}
+                    </button>
+                  </div>
+                </div>
+                <div>
                   <label className="block text-sm font-medium text-gray-700">
                     Endereço
                   </label>
@@ -353,6 +554,7 @@ export default function StoresPage() {
                       setFormData({ ...formData, address: e.target.value })
                     }
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md"
+                    placeholder="Digite o endereço completo da loja"
                   />
                 </div>
                 <div>
@@ -464,9 +666,17 @@ export default function StoresPage() {
                 <div className="flex space-x-2 pt-4">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    disabled={saving || uploadingLogo}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Salvar
+                    {saving || uploadingLogo ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        {uploadingLogo ? 'Enviando...' : 'Salvando...'}
+                      </>
+                    ) : (
+                      'Salvar'
+                    )}
                   </button>
                   <button
                     type="button"

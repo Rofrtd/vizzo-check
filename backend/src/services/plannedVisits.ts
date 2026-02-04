@@ -5,6 +5,7 @@ export interface PlannedVisitsReport {
   executed: number;
   completion_rate: number;
   period_days: number;
+  unprogrammed_allocations: number;
   by_promoter: Array<{
     promoter_id: string;
     promoter_name: string;
@@ -52,6 +53,7 @@ export async function calculatePlannedVisits(
       executed: 0,
       completion_rate: 0,
       period_days: periodDays,
+      unprogrammed_allocations: 0,
       by_promoter: [],
       by_brand: []
     };
@@ -71,6 +73,7 @@ export async function calculatePlannedVisits(
       executed: 0,
       completion_rate: 0,
       period_days: periodDays,
+      unprogrammed_allocations: 0,
       by_promoter: [],
       by_brand: []
     };
@@ -88,6 +91,7 @@ export async function calculatePlannedVisits(
       executed: 0,
       completion_rate: 0,
       period_days: periodDays,
+      unprogrammed_allocations: 0,
       by_promoter: [],
       by_brand: []
     };
@@ -113,6 +117,39 @@ export async function calculatePlannedVisits(
     .select('brand_id, store_id')
     .in('brand_id', brandIds);
 
+  // Get active allocations for these promoters
+  const { data: allocations } = await supabase
+    .from('promoter_allocations')
+    .select('promoter_id, brand_id, store_id, days_of_week, frequency_per_week')
+    .in('promoter_id', promoterIds)
+    .eq('active', true);
+
+  // Create a map for quick lookup: key = `${promoter_id}-${brand_id}-${store_id}`
+  const allocationMap = new Map<string, { days_of_week: number[], frequency_per_week: number }>();
+  (allocations || []).forEach(alloc => {
+    const key = `${alloc.promoter_id}-${alloc.brand_id}-${alloc.store_id}`;
+    allocationMap.set(key, {
+      days_of_week: alloc.days_of_week || [],
+      frequency_per_week: alloc.frequency_per_week || 1
+    });
+  });
+
+  // Helper function to count occurrences of specific days in a date range
+  function countDaysInPeriod(daysOfWeek: number[], startDate: Date, endDate: Date): number {
+    let count = 0;
+    const currentDate = new Date(startDate);
+    
+    while (currentDate <= endDate) {
+      const dayOfWeek = currentDate.getDay(); // 0 = Sunday, 1 = Monday, ..., 6 = Saturday
+      if (daysOfWeek.includes(dayOfWeek)) {
+        count++;
+      }
+      currentDate.setDate(currentDate.getDate() + 1);
+    }
+    
+    return count;
+  }
+
   // Calculate planned visits proportionally based on period
   const plannedByPromoter = new Map<string, number>();
   const plannedByBrand = new Map<string, number>();
@@ -136,21 +173,36 @@ export async function calculatePlannedVisits(
       if (!brand) continue;
 
       // Get stores where this brand is present and promoter is authorized
-      const validStoreIds = (brandStores || [])
-        .filter(bs => bs.brand_id === brandId && authorizedStoreIds.includes(bs.store_id))
-        .map(bs => bs.store_id);
+      const validBrandStores = (brandStores || [])
+        .filter(bs => bs.brand_id === brandId && authorizedStoreIds.includes(bs.store_id));
 
-      if (validStoreIds.length === 0) continue;
+      if (validBrandStores.length === 0) continue;
 
-      // Determine visit frequency (per week)
-      const frequencyPerBrand = promoter.visit_frequency_per_brand as Record<string, number> || {};
-      const frequencyPerWeek = frequencyPerBrand[brandId] || brand.visit_frequency || 1;
+      // Calculate planned visits for each store
+      let plannedForBrand = 0;
 
-      // Calculate visits for the period: frequency per week * weeks in period
-      const visitsForPeriod = frequencyPerWeek * weeksInPeriod;
-      
-      // Multiply by number of valid stores
-      const plannedForBrand = visitsForPeriod * validStoreIds.length;
+      for (const brandStore of validBrandStores) {
+        const storeId = brandStore.store_id;
+        const allocationKey = `${promoter.id}-${brandId}-${storeId}`;
+        const allocation = allocationMap.get(allocationKey);
+
+        if (allocation && allocation.days_of_week.length > 0) {
+          // Use specific allocation: count actual days in period
+          const visitsForThisStore = countDaysInPeriod(
+            allocation.days_of_week,
+            startDate,
+            endDate
+          );
+          plannedForBrand += visitsForThisStore;
+        } else {
+          // Use frequency specific to brand-store combination, then promoter override, then brand default
+          const frequencyPerBrand = promoter.visit_frequency_per_brand as Record<string, number> || {};
+          const brandStoreFrequency = brandStore.visit_frequency || brand.visit_frequency || 1;
+          const frequencyPerWeek = frequencyPerBrand[brandId] || brandStoreFrequency;
+          const visitsForPeriod = frequencyPerWeek * weeksInPeriod;
+          plannedForBrand += visitsForPeriod;
+        }
+      }
       
       promoterPlanned.set(brandId, (promoterPlanned.get(brandId) || 0) + plannedForBrand);
       plannedByBrand.set(brandId, (plannedByBrand.get(brandId) || 0) + plannedForBrand);
@@ -169,7 +221,7 @@ export async function calculatePlannedVisits(
   
   const { data: executedVisits } = await supabase
     .from('visits')
-    .select('id, promoter_id, brand_id, timestamp')
+    .select('id, promoter_id, brand_id, store_id, timestamp')
     .in('promoter_id', promoterIds)
     .gte('timestamp', startDateTime)
     .lte('timestamp', endDateTime);
@@ -215,11 +267,45 @@ export async function calculatePlannedVisits(
   // Round to 1 decimal place for display
   const roundedCompletionRate = Math.round(completion_rate * 10) / 10;
 
+  // Calculate unprogrammed allocations: active allocations that should have visits in the period but have none
+  let unprogrammedAllocations = 0;
+  
+  if (allocations && allocations.length > 0) {
+    // Create a set of executed visit combinations (promoter_id-brand_id-store_id) for quick lookup
+    const executedCombinations = new Set<string>();
+    (executedVisits || []).forEach(visit => {
+      const visitKey = `${visit.promoter_id}-${visit.brand_id}-${visit.store_id}`;
+      executedCombinations.add(visitKey);
+    });
+
+    // Check each allocation
+    for (const allocation of allocations) {
+      // Check if this allocation should have visits in this period
+      const expectedVisits = countDaysInPeriod(
+        allocation.days_of_week || [],
+        startDate,
+        endDate
+      );
+
+      // If this allocation should have visits in the period
+      if (expectedVisits > 0) {
+        // Check if there's at least one visit for this exact promoter-brand-store combination
+        const allocationKey = `${allocation.promoter_id}-${allocation.brand_id}-${allocation.store_id}`;
+        
+        // If no visits exist for this exact allocation combination, it's unprogrammed
+        if (!executedCombinations.has(allocationKey)) {
+          unprogrammedAllocations++;
+        }
+      }
+    }
+  }
+
   return {
     planned: roundedPlanned,
     executed: totalExecuted,
     completion_rate: roundedCompletionRate,
     period_days: periodDays,
+    unprogrammed_allocations: unprogrammedAllocations,
     by_promoter: byPromoter,
     by_brand: byBrand
   };

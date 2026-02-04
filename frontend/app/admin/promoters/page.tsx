@@ -30,6 +30,7 @@ export default function PromotersPage() {
   const [stores, setStores] = useState<any[]>([]);
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoFile, setPhotoFile] = useState<File | null>(null);
+  const [saving, setSaving] = useState(false);
   
   // Filters
   const [filters, setFilters] = useState({
@@ -178,7 +179,7 @@ export default function PromotersPage() {
         const result = await api.uploadPromoterPhoto(file, editing.id);
         setFormData({ ...formData, photo_url: result.url });
       } catch (error: any) {
-        alert(error.message || 'Failed to upload photo');
+        alert(error.message || 'Erro ao enviar foto');
       } finally {
         setUploadingPhoto(false);
       }
@@ -196,12 +197,15 @@ export default function PromotersPage() {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    setSaving(true);
     try {
       if (editing) {
         await api.updatePromoter(editing.id, formData);
       } else {
+        // Remover photo_url do formData ao criar (foto será enviada separadamente)
+        const { photo_url, ...promoterData } = formData;
         // Criar promotor primeiro
-        const newPromoter = await api.createPromoter(formData) as any;
+        const newPromoter = await api.createPromoter(promoterData) as any;
         
         // Se houver arquivo de foto, fazer upload após criação
         if (photoFile && newPromoter?.id) {
@@ -220,7 +224,9 @@ export default function PromotersPage() {
       setPhotoFile(null);
       await loadData();
     } catch (error: any) {
-      alert(error.message || 'Failed to save promoter');
+      alert(error.message || 'Erro ao salvar promotor');
+    } finally {
+      setSaving(false);
     }
   }
 
@@ -229,7 +235,7 @@ export default function PromotersPage() {
       await api.togglePromoterActive(promoter.id);
       await loadData();
     } catch (error) {
-      alert('Failed to toggle active status');
+      alert('Erro ao alterar status');
     }
   }
 
@@ -463,7 +469,7 @@ export default function PromotersPage() {
                     </td>
                     <td className="px-6 py-2.5 whitespace-nowrap">
                       <span className="text-sm text-gray-900 group-hover:text-blue-700 transition-colors">
-                        {promoter.user?.email || 'N/A'}
+                        {promoter.user?.email || 'N/D'}
                       </span>
                     </td>
                     <td className="px-6 py-2.5 whitespace-nowrap">
@@ -697,9 +703,17 @@ export default function PromotersPage() {
                 <div className="flex space-x-2 pt-4">
                   <button
                     type="submit"
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700"
+                    disabled={saving || uploadingPhoto}
+                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
                   >
-                    Salvar
+                    {saving || uploadingPhoto ? (
+                      <>
+                        <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white"></div>
+                        {uploadingPhoto ? 'Enviando...' : 'Salvando...'}
+                      </>
+                    ) : (
+                      'Salvar'
+                    )}
                   </button>
                   <button
                     type="button"

@@ -10,6 +10,7 @@ import storeRoutes from './routes/stores.js';
 import visitRoutes from './routes/visits.js';
 import reportRoutes from './routes/reports.js';
 import uploadRoutes from './routes/upload.js';
+import allocationRoutes from './routes/allocations.js';
 import { errorHandler } from './middleware/errorHandler.js';
 
 dotenv.config();
@@ -24,8 +25,9 @@ app.use(cors({
     : 'http://localhost:3000',
   credentials: true
 }));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true }));
+// Increase body size limit to 50MB for file uploads (base64 encoded images can be large)
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // Serve uploaded files
 const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
@@ -49,6 +51,7 @@ app.use('/api/stores', storeRoutes);
 app.use('/api/visits', visitRoutes);
 app.use('/api/reports', reportRoutes);
 app.use('/api/upload', uploadRoutes);
+app.use('/api/allocations', allocationRoutes);
 
 // Error handling middleware
 app.use(errorHandler);

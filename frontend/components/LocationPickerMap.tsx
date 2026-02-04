@@ -19,11 +19,12 @@ export default function LocationPickerMap({ lat, lng, onLocationSelect, height =
     if (!mapContainerRef.current || mapRef.current) return;
 
     // Default to São Paulo, Brazil if no coordinates provided
-    const defaultLat = lat || -23.5505;
-    const defaultLng = lng || -46.6333;
+    const defaultLat = (lat !== null && !isNaN(lat)) ? lat : -23.5505;
+    const defaultLng = (lng !== null && !isNaN(lng)) ? lng : -46.6333;
+    const initialZoom = (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) ? 15 : 13;
 
     // Initialize map
-    const map = L.map(mapContainerRef.current).setView([defaultLat, defaultLng], 13);
+    const map = L.map(mapContainerRef.current).setView([defaultLat, defaultLng], initialZoom);
 
     // Add OpenStreetMap tiles
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
@@ -31,13 +32,25 @@ export default function LocationPickerMap({ lat, lng, onLocationSelect, height =
       maxZoom: 19
     }).addTo(map);
 
-    // Create marker icon
-    const markerIcon = L.divIcon({
-      className: 'custom-marker',
-      html: `<div style="background-color: #3b82f6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); cursor: pointer;"></div>`,
-      iconSize: [24, 24],
-      iconAnchor: [12, 12]
-    });
+    // Create PIN marker icon
+    const createPinIcon = () => {
+      return L.divIcon({
+        className: 'custom-marker',
+        html: `
+          <div style="position: relative; cursor: pointer;">
+            <svg width="32" height="40" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M16 0C10.477 0 6 4.477 6 10C6 17 16 30 16 30C16 30 26 17 26 10C26 4.477 21.523 0 16 0Z" fill="#3b82f6" stroke="white" stroke-width="2"/>
+              <circle cx="16" cy="10" r="4" fill="white"/>
+            </svg>
+          </div>
+        `,
+        iconSize: [32, 40],
+        iconAnchor: [16, 40],
+        popupAnchor: [0, -40]
+      });
+    };
+    
+    const markerIcon = createPinIcon();
 
     // Add initial marker if coordinates are provided
     if (lat && lng) {
@@ -94,28 +107,51 @@ export default function LocationPickerMap({ lat, lng, onLocationSelect, height =
 
   // Update marker position when lat/lng change externally
   useEffect(() => {
-    if (mapRef.current && markerRef.current && lat && lng) {
-      markerRef.current.setLatLng([lat, lng]);
-      mapRef.current.setView([lat, lng], mapRef.current.getZoom());
-    } else if (mapRef.current && lat && lng && !markerRef.current) {
-      // Create marker if it doesn't exist
-      const markerIcon = L.divIcon({
-        className: 'custom-marker',
-        html: `<div style="background-color: #3b82f6; width: 24px; height: 24px; border-radius: 50%; border: 3px solid white; box-shadow: 0 2px 8px rgba(0,0,0,0.4); cursor: pointer;"></div>`,
-        iconSize: [24, 24],
-        iconAnchor: [12, 12]
-      });
+    if (!mapRef.current) return;
 
-      const marker = L.marker([lat, lng], { icon: markerIcon, draggable: true })
-        .addTo(mapRef.current)
-        .bindPopup('Localização selecionada');
+    if (lat !== null && lng !== null && !isNaN(lat) && !isNaN(lng)) {
+      // Center map on new location with smooth animation
+      // Use zoom 13 for cities (broader view), 15 for specific addresses
+      const zoom = 13;
+      mapRef.current.setView([lat, lng], zoom, { animate: true, duration: 0.5 });
 
-      markerRef.current = marker;
+      if (markerRef.current) {
+        // Update existing marker position
+        markerRef.current.setLatLng([lat, lng]);
+        markerRef.current.openPopup();
+      } else {
+        // Create marker if it doesn't exist
+        const createPinIcon = () => {
+          return L.divIcon({
+            className: 'custom-marker',
+            html: `
+              <div style="position: relative; cursor: pointer;">
+                <svg width="32" height="40" viewBox="0 0 32 40" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <path d="M16 0C10.477 0 6 4.477 6 10C6 17 16 30 16 30C16 30 26 17 26 10C26 4.477 21.523 0 16 0Z" fill="#3b82f6" stroke="white" stroke-width="2"/>
+                  <circle cx="16" cy="10" r="4" fill="white"/>
+                </svg>
+              </div>
+            `,
+            iconSize: [32, 40],
+            iconAnchor: [16, 40],
+            popupAnchor: [0, -40]
+          });
+        };
+        
+        const markerIcon = createPinIcon();
 
-      marker.on('dragend', (e) => {
-        const position = e.target.getLatLng();
-        onLocationSelect(position.lat, position.lng);
-      });
+        const marker = L.marker([lat, lng], { icon: markerIcon, draggable: true })
+          .addTo(mapRef.current)
+          .bindPopup('Localização selecionada')
+          .openPopup();
+
+        markerRef.current = marker;
+
+        marker.on('dragend', (e) => {
+          const position = e.target.getLatLng();
+          onLocationSelect(position.lat, position.lng);
+        });
+      }
     }
   }, [lat, lng, onLocationSelect]);
 

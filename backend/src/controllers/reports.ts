@@ -12,6 +12,7 @@ import {
   getToBeReceivedReport
 } from '../services/financialReports.js';
 import { calculatePlannedVisits } from '../services/plannedVisits.js';
+import { getBrandsWithoutAllocations } from '../services/brandsWithoutAllocations.js';
 
 export async function getFinancialReport(req: AuthRequest, res: Response) {
   const agencyId = req.agencyId!;
@@ -144,5 +145,16 @@ export async function getPlannedVisitsController(req: AuthRequest, res: Response
     res.json(report);
   } catch (error: any) {
     throw new AppError(error.message || 'Failed to calculate planned visits', 500);
+  }
+}
+
+export async function getBrandsWithoutAllocationsController(req: AuthRequest, res: Response) {
+  const agencyId = req.agencyId!;
+
+  try {
+    const brands = await getBrandsWithoutAllocations(agencyId);
+    res.json(brands);
+  } catch (error: any) {
+    throw new AppError(error.message || 'Failed to get brands without allocations', 500);
   }
 }

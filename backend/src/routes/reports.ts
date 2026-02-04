@@ -7,7 +7,8 @@ import {
   getStoreReportController,
   getToBePaidReportController,
   getToBeReceivedReportController,
-  getPlannedVisitsController
+  getPlannedVisitsController,
+  getBrandsWithoutAllocationsController
 } from '../controllers/reports.js';
 import { authenticate, requireRole } from '../middleware/auth.js';
 
@@ -24,5 +25,6 @@ router.get('/stores', getStoreReportController);
 router.get('/to-be-paid', getToBePaidReportController);
 router.get('/to-be-received', getToBeReceivedReportController);
 router.get('/planned-visits', getPlannedVisitsController);
+router.get('/brands-without-allocations', getBrandsWithoutAllocationsController);
 
 export default router;

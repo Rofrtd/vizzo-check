@@ -288,7 +288,7 @@ export default function VisitsPage() {
                             return (
                               <img 
                                 src={`${API_URL}${photoUrl}`} 
-                                alt={promoter?.name || 'N/A'}
+                                alt={promoter?.name || 'N/D'}
                                 className="w-8 h-8 rounded-full object-cover border-2 border-blue-200 group-hover:border-blue-300 group-hover:scale-110 transition-all"
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
@@ -305,7 +305,7 @@ export default function VisitsPage() {
                           className={`w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center group-hover:bg-blue-200 group-hover:scale-110 transition-all ${(visit.promoter as any)?.photo_url ? 'hidden' : ''}`}
                         >
                           <span className="text-xs font-semibold text-blue-700">
-                            {((visit.promoter as any)?.name || 'N/A').charAt(0).toUpperCase()}
+                            {((visit.promoter as any)?.name || 'N/D').charAt(0).toUpperCase()}
                           </span>
                         </div>
                         <span className="text-sm font-medium text-gray-900 group-hover:text-blue-700 group-hover:font-semibold transition-all">
@@ -322,7 +322,7 @@ export default function VisitsPage() {
                             return (
                               <img 
                                 src={`${API_URL}${logoUrl}`} 
-                                alt={store?.chain_name || 'N/A'}
+                                alt={store?.chain_name || 'N/D'}
                                 className="w-8 h-8 object-contain border border-gray-200 rounded group-hover:border-purple-300 transition-all"
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
@@ -343,7 +343,7 @@ export default function VisitsPage() {
                           </svg>
                         </div>
                         <span className="text-sm text-gray-900 group-hover:text-blue-700 group-hover:font-semibold transition-all">
-                          {(visit.store as any)?.chain_name || 'N/A'}
+                          {(visit.store as any)?.chain_name || 'N/D'}
                         </span>
                       </div>
                     </td>
@@ -356,7 +356,7 @@ export default function VisitsPage() {
                             return (
                               <img 
                                 src={`${API_URL}${logoUrl}`} 
-                                alt={brand?.name || 'N/A'}
+                                alt={brand?.name || 'N/D'}
                                 className="w-8 h-8 object-contain border border-gray-200 rounded group-hover:border-indigo-300 transition-all"
                                 onError={(e) => {
                                   const target = e.target as HTMLImageElement;
@@ -377,7 +377,7 @@ export default function VisitsPage() {
                           </svg>
                         </div>
                         <span className="text-sm font-medium text-gray-900 group-hover:text-indigo-700 group-hover:font-semibold transition-all">
-                          {(visit.brand as any)?.name || 'N/A'}
+                          {(visit.brand as any)?.name || 'N/D'}
                         </span>
                       </div>
                     </td>

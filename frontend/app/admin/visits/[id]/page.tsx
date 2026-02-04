@@ -85,7 +85,7 @@ export default function VisitDetailPage() {
                   {/* Most Important: Promoter, Store, Brand */}
                   <div>
                     <label className="text-sm font-medium text-gray-500">Promotor</label>
-                    <p className="text-lg font-semibold">{(visit.promoter as any)?.name || 'N/A'}</p>
+                    <p className="text-lg font-semibold">{(visit.promoter as any)?.name || 'N/D'}</p>
                     {(visit.promoter as any)?.phone && (
                       <p className="text-sm text-gray-500 mt-1">{(visit.promoter as any)?.phone}</p>
                     )}
@@ -97,7 +97,7 @@ export default function VisitDetailPage() {
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Marca</label>
-                    <p className="text-lg font-semibold">{(visit.brand as any)?.name || 'N/A'}</p>
+                    <p className="text-lg font-semibold">{(visit.brand as any)?.name || 'N/D'}</p>
                   </div>
                   <div>
                     <label className="text-sm font-medium text-gray-500">Status</label>
@@ -207,7 +207,7 @@ export default function VisitDetailPage() {
                           <div className="flex-shrink-0">
                             <img
                               src={productPhotoUrl}
-                              alt={product?.name || 'Product'}
+                              alt={product?.name || 'Produto'}
                               className="w-24 h-24 object-cover rounded border"
                               onError={(e) => {
                                 (e.target as HTMLImageElement).style.display = 'none';
@@ -221,7 +221,7 @@ export default function VisitDetailPage() {
                         )}
                         <div>
                           <h3 className="font-semibold text-lg">{product?.name || 'Unknown Product'}</h3>
-                          <p className="text-sm text-gray-500">Code: {product?.code || 'N/A'}</p>
+                          <p className="text-sm text-gray-500">Código: {product?.code || 'N/D'}</p>
                           <p className="text-sm text-gray-500 mt-1">{product?.description || ''}</p>
                         </div>
                       </div>
