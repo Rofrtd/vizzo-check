@@ -1,15 +1,26 @@
+import path from 'path';
 import { Response } from 'express';
 import { AppError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
-import { saveVisitPhoto, saveProductPhoto, saveBrandLogo, saveStoreLogo, savePromoterPhoto } from '../utils/fileUpload.js';
+import { uploadImage } from '../services/cloudStorage.js';
 import { supabase } from '../lib/supabase.js';
+
+function buildVisitPhotoKey(
+  agencyId: string,
+  visitId: string,
+  productId: string,
+  type: 'before' | 'after',
+  ext: string
+): string {
+  return `${agencyId}/visits/${visitId}/product-${productId}-${type}-${Date.now()}${ext}`;
+}
 
 export async function uploadPhoto(req: AuthRequest, res: Response) {
   const file = req.file;
   const { visit_id, product_id, type } = req.body;
   const agencyId = req.agencyId!;
 
-  if (!file) {
+  if (!file || !file.buffer) {
     throw new AppError('No file uploaded', 400);
   }
 
@@ -22,10 +33,13 @@ export async function uploadPhoto(req: AuthRequest, res: Response) {
   }
 
   try {
-    const url = saveVisitPhoto(file, agencyId, visit_id, product_id, type);
+    const ext = path.extname(file.originalname);
+    const key = buildVisitPhotoKey(agencyId, visit_id, product_id, type, ext);
+    const url = await uploadImage(file.buffer, file.mimetype, key);
     res.json({ url });
-  } catch (error: any) {
-    throw new AppError(`Failed to save photo: ${error.message}`, 500);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new AppError(`Failed to save photo: ${message}`, 500);
   }
 }
 
@@ -34,7 +48,7 @@ export async function uploadProductPhoto(req: AuthRequest, res: Response) {
   const { product_id } = req.body;
   const agencyId = req.agencyId!;
 
-  if (!file) {
+  if (!file || !file.buffer) {
     throw new AppError('No file uploaded', 400);
   }
 
@@ -54,17 +68,19 @@ export async function uploadProductPhoto(req: AuthRequest, res: Response) {
   }
 
   try {
-    const url = saveProductPhoto(file, agencyId, product_id);
-    
-    // Update product with photo URL
+    const ext = path.extname(file.originalname);
+    const key = `${agencyId}/products/${product_id}/product-${Date.now()}${ext}`;
+    const url = await uploadImage(file.buffer, file.mimetype, key);
+
     await supabase
       .from('products')
       .update({ photo_url: url })
       .eq('id', product_id);
 
     res.json({ url });
-  } catch (error: any) {
-    throw new AppError(`Failed to save photo: ${error.message}`, 500);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new AppError(`Failed to save photo: ${message}`, 500);
   }
 }
 
@@ -73,7 +89,7 @@ export async function uploadBrandLogo(req: AuthRequest, res: Response) {
   const { brand_id } = req.body;
   const agencyId = req.agencyId!;
 
-  if (!file) {
+  if (!file || !file.buffer) {
     throw new AppError('No file uploaded', 400);
   }
 
@@ -93,17 +109,19 @@ export async function uploadBrandLogo(req: AuthRequest, res: Response) {
   }
 
   try {
-    const url = saveBrandLogo(file, agencyId, brand_id);
-    
-    // Update brand with logo URL
+    const ext = path.extname(file.originalname);
+    const key = `${agencyId}/brands/${brand_id}/logo-${Date.now()}${ext}`;
+    const url = await uploadImage(file.buffer, file.mimetype, key);
+
     await supabase
       .from('brands')
       .update({ logo_url: url })
       .eq('id', brand_id);
 
     res.json({ url });
-  } catch (error: any) {
-    throw new AppError(`Failed to save logo: ${error.message}`, 500);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new AppError(`Failed to save logo: ${message}`, 500);
   }
 }
 
@@ -112,7 +130,7 @@ export async function uploadStoreLogo(req: AuthRequest, res: Response) {
   const { store_id } = req.body;
   const agencyId = req.agencyId!;
 
-  if (!file) {
+  if (!file || !file.buffer) {
     throw new AppError('No file uploaded', 400);
   }
 
@@ -132,17 +150,19 @@ export async function uploadStoreLogo(req: AuthRequest, res: Response) {
   }
 
   try {
-    const url = saveStoreLogo(file, agencyId, store_id);
-    
-    // Update store with logo URL
+    const ext = path.extname(file.originalname);
+    const key = `${agencyId}/stores/${store_id}/logo-${Date.now()}${ext}`;
+    const url = await uploadImage(file.buffer, file.mimetype, key);
+
     await supabase
       .from('stores')
       .update({ logo_url: url })
       .eq('id', store_id);
 
     res.json({ url });
-  } catch (error: any) {
-    throw new AppError(`Failed to save logo: ${error.message}`, 500);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new AppError(`Failed to save logo: ${message}`, 500);
   }
 }
 
@@ -151,7 +171,7 @@ export async function uploadPromoterPhoto(req: AuthRequest, res: Response) {
   const { promoter_id } = req.body;
   const agencyId = req.agencyId!;
 
-  if (!file) {
+  if (!file || !file.buffer) {
     throw new AppError('No file uploaded', 400);
   }
 
@@ -182,16 +202,18 @@ export async function uploadPromoterPhoto(req: AuthRequest, res: Response) {
   }
 
   try {
-    const url = savePromoterPhoto(file, agencyId, promoter_id);
-    
-    // Update promoter with photo URL
+    const ext = path.extname(file.originalname);
+    const key = `${agencyId}/promoters/${promoter_id}/photo-${Date.now()}${ext}`;
+    const url = await uploadImage(file.buffer, file.mimetype, key);
+
     await supabase
       .from('promoters')
       .update({ photo_url: url })
       .eq('id', promoter_id);
 
     res.json({ url });
-  } catch (error: any) {
-    throw new AppError(`Failed to save photo: ${error.message}`, 500);
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Unknown error';
+    throw new AppError(`Failed to save photo: ${message}`, 500);
   }
 }

@@ -4,7 +4,6 @@ import { AppError } from '../middleware/errorHandler.js';
 import { AuthRequest } from '../middleware/auth.js';
 import { validateGPS } from '../services/gpsValidation.js';
 import { CreateVisitRequest } from '@vizzocheck/shared';
-import { saveVisitPhoto } from '../utils/fileUpload.js';
 
 export async function listVisits(req: AuthRequest, res: Response) {
   const agencyId = req.agencyId!;
