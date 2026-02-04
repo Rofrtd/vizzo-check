@@ -1,0 +1,7 @@
+# VizzoCheck - mise configuration
+# Install with: mise install
+
+[tools]
+node = "20"
+bun = "latest"
+supabase = "latest"
