@@ -1,11 +1,11 @@
 // User types
-export type UserRole = 'agency_admin' | 'promoter';
+export type UserRole = 'system_admin' | 'agency' | 'promoter';
 
 export interface User {
   id: string;
   email: string;
   role: UserRole;
-  agency_id: string;
+  agency_id: string | null;
   created_at: string;
 }
 
