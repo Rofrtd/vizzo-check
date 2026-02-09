@@ -1,7 +1,6 @@
 import { Response } from 'express';
-import { supabase } from '../lib/supabase.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { AuthRequest } from '../middleware/auth.js';
+import { AuthRequest, getEffectiveAgencyId } from '../middleware/auth.js';
 import { calculateFinancialReport } from '../services/financial.js';
 import { FinancialReportQuery } from '@vizzocheck/shared';
 import {
@@ -14,8 +13,16 @@ import {
 import { calculatePlannedVisits } from '../services/plannedVisits.js';
 import { getBrandsWithoutAllocations } from '../services/brandsWithoutAllocations.js';
 
+function getReportAgencyId(req: AuthRequest): string {
+  const agencyId = getEffectiveAgencyId(req, req.query.agency_id as string | undefined);
+  if (!agencyId) {
+    throw new AppError('Agency scope required (agency_id query param for system_admin)', 400);
+  }
+  return agencyId;
+}
+
 export async function getFinancialReport(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
   const query = req.query as unknown as FinancialReportQuery;
 
   try {
@@ -27,7 +34,7 @@ export async function getFinancialReport(req: AuthRequest, res: Response) {
 }
 
 export async function exportFinancialReport(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
   const query = req.query as unknown as FinancialReportQuery;
   const format = req.query.format as string || 'csv';
 
@@ -66,7 +73,7 @@ export async function exportFinancialReport(req: AuthRequest, res: Response) {
 
 // New report endpoints
 export async function getPromoterReportController(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
 
@@ -79,7 +86,7 @@ export async function getPromoterReportController(req: AuthRequest, res: Respons
 }
 
 export async function getBrandReportController(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
 
@@ -92,7 +99,7 @@ export async function getBrandReportController(req: AuthRequest, res: Response) 
 }
 
 export async function getStoreReportController(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
 
@@ -105,7 +112,7 @@ export async function getStoreReportController(req: AuthRequest, res: Response) 
 }
 
 export async function getToBePaidReportController(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
 
@@ -118,7 +125,7 @@ export async function getToBePaidReportController(req: AuthRequest, res: Respons
 }
 
 export async function getToBeReceivedReportController(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
   const startDate = req.query.startDate as string | undefined;
   const endDate = req.query.endDate as string | undefined;
 
@@ -131,12 +138,12 @@ export async function getToBeReceivedReportController(req: AuthRequest, res: Res
 }
 
 export async function getPlannedVisitsController(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
-  
+  const agencyId = getReportAgencyId(req);
+
   // Default: first day of current month to today
   const now = new Date();
   const firstDayOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  
+
   const startDate = req.query.startDate as string || firstDayOfMonth.toISOString().split('T')[0];
   const endDate = req.query.endDate as string || now.toISOString().split('T')[0];
 
@@ -149,7 +156,7 @@ export async function getPlannedVisitsController(req: AuthRequest, res: Response
 }
 
 export async function getBrandsWithoutAllocationsController(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getReportAgencyId(req);
 
   try {
     const brands = await getBrandsWithoutAllocations(agencyId);

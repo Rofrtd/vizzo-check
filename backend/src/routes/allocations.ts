@@ -1,5 +1,5 @@
 import express from 'express';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireRole } from '../middleware/auth.js';
 import {
   listAllocations,
   getAllocation,
@@ -11,8 +11,8 @@ import {
 
 const router = express.Router();
 
-// All routes require authentication
 router.use(authenticate);
+router.use(requireRole(['agency', 'system_admin']));
 
 router.get('/', listAllocations);
 router.get('/suggestions/:promoterId/:brandId/:storeId', getSuggestions);

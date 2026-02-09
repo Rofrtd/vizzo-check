@@ -43,13 +43,13 @@ export async function register(req: Request<{}, {}, RegisterRequest>, res: Respo
     );
   }
 
-  // Create admin user
+  // Create agency user (organization that manages its stores, promoters, brands)
   const { data: user, error: userError } = await supabase
     .from('users')
     .insert({
       email,
       password_hash,
-      role: 'agency_admin',
+      role: 'agency',
       agency_id: agency.id
     })
     .select()

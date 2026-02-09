@@ -1,16 +1,16 @@
 import { Response } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { AuthRequest } from '../middleware/auth.js';
+import { AuthRequest, getEffectiveAgencyId } from '../middleware/auth.js';
 
 export async function listBrands(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getEffectiveAgencyId(req, req.query.agency_id as string | undefined);
 
-  const { data: brands, error } = await supabase
-    .from('brands')
-    .select('*')
-    .eq('agency_id', agencyId)
-    .order('name');
+  let query = supabase.from('brands').select('*').order('name');
+  if (agencyId) {
+    query = query.eq('agency_id', agencyId);
+  }
+  const { data: brands, error } = await query;
 
   if (error) {
     throw new AppError(`Failed to fetch brands: ${error.message}`, 500);
@@ -50,8 +50,11 @@ export async function listBrands(req: AuthRequest, res: Response) {
 }
 
 export async function createBrand(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
-  const { name, visit_frequency, price_per_visit, contacts, store_ids } = req.body;
+  const { agency_id: bodyAgencyId, name, visit_frequency, price_per_visit, contacts, store_ids } = req.body;
+  const agencyId = req.user?.role === 'system_admin' ? bodyAgencyId : req.agencyId;
+  if (!agencyId) {
+    throw new AppError('Agency scope required (agency_id for system_admin)', 400);
+  }
 
   if (!name) {
     throw new AppError('Brand name is required', 400);
@@ -111,17 +114,18 @@ export async function createBrand(req: AuthRequest, res: Response) {
 
 export async function getBrand(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
 
   const { data: brand, error } = await supabase
     .from('brands')
     .select('*')
     .eq('id', id)
-    .eq('agency_id', agencyId)
     .single();
 
   if (error || !brand) {
     throw new AppError('Brand not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && brand.agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   // Get related data
@@ -148,19 +152,19 @@ export async function getBrand(req: AuthRequest, res: Response) {
 
 export async function updateBrand(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
   const updates = req.body;
 
-  // Verify brand belongs to agency
   const { data: brand } = await supabase
     .from('brands')
-    .select('id')
+    .select('id, agency_id')
     .eq('id', id)
-    .eq('agency_id', agencyId)
     .single();
 
   if (!brand) {
     throw new AppError('Brand not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && brand.agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   const { data: updated, error } = await supabase
@@ -211,23 +215,23 @@ export async function updateBrand(req: AuthRequest, res: Response) {
 
 export async function addProduct(req: AuthRequest, res: Response) {
   const { id: brand_id } = req.params;
-  const agencyId = req.agencyId!;
   const { name, code, description, photo_url } = req.body;
 
   if (!name || !code) {
     throw new AppError('Product name and code are required', 400);
   }
 
-  // Verify brand belongs to agency
   const { data: brand } = await supabase
     .from('brands')
-    .select('id')
+    .select('id, agency_id')
     .eq('id', brand_id)
-    .eq('agency_id', agencyId)
     .single();
 
   if (!brand) {
     throw new AppError('Brand not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && brand.agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   const { data: product, error } = await supabase
@@ -251,18 +255,19 @@ export async function addProduct(req: AuthRequest, res: Response) {
 
 export async function updateProduct(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
   const updates = req.body;
 
-  // Verify product's brand belongs to agency
   const { data: product } = await supabase
     .from('products')
     .select('brand_id, brands!inner(agency_id)')
     .eq('id', id)
     .single();
 
-  if (!product || (product.brands as any).agency_id !== agencyId) {
+  if (!product) {
     throw new AppError('Product not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && (product.brands as any).agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   const { data: updated, error } = await supabase
@@ -286,17 +291,18 @@ export async function updateProduct(req: AuthRequest, res: Response) {
 
 export async function deleteProduct(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
 
-  // Verify product's brand belongs to agency
   const { data: product } = await supabase
     .from('products')
     .select('brand_id, photo_url, brands!inner(agency_id)')
     .eq('id', id)
     .single();
 
-  if (!product || (product.brands as any).agency_id !== agencyId) {
+  if (!product) {
     throw new AppError('Product not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && (product.brands as any).agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   // Delete product

@@ -13,12 +13,12 @@ const router = express.Router();
 
 router.use(authenticate);
 
-router.get('/', listVisits);
+router.get('/', requireRole(['agency', 'system_admin']), listVisits);
 router.post('/', createVisit);
 router.get('/my-visits', getMyVisits);
 // More specific routes must come before generic :id routes
-router.put('/:visitId/products/:productId/photos', updateVisitProductPhotos);
-router.get('/:id', getVisit);
-router.put('/:id', requireRole(['agency_admin']), updateVisit);
+router.put('/:visitId/products/:productId/photos', requireRole(['agency', 'system_admin']), updateVisitProductPhotos);
+router.get('/:id', requireRole(['agency', 'system_admin']), getVisit);
+router.put('/:id', requireRole(['agency', 'system_admin']), updateVisit);
 
 export default router;

@@ -1,12 +1,12 @@
 import { Response } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { AuthRequest } from '../middleware/auth.js';
+import { AuthRequest, getEffectiveAgencyId } from '../middleware/auth.js';
 import { validateGPS } from '../services/gpsValidation.js';
 import { CreateVisitRequest } from '@vizzocheck/shared';
 
 export async function listVisits(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getEffectiveAgencyId(req, req.query.agency_id as string | undefined);
   const { startDate, endDate, promoter_id, store_id, brand_id, status } = req.query;
 
   let query = supabase
@@ -19,18 +19,19 @@ export async function listVisits(req: AuthRequest, res: Response) {
     `)
     .order('timestamp', { ascending: false });
 
-  // Filter by agency (through promoter)
-  const { data: promoters } = await supabase
-    .from('promoters')
-    .select('id, user:users!inner(agency_id)')
-    .eq('user.agency_id', agencyId);
-
-  const promoterIds = promoters?.map(p => p.id) || [];
-  if (promoterIds.length === 0) {
-    return res.json([]);
+  // Filter by agency (through promoter) when scope is set
+  let promoterIds: string[] = [];
+  if (agencyId) {
+    const { data: promoters } = await supabase
+      .from('promoters')
+      .select('id, user:users!inner(agency_id)')
+      .eq('user.agency_id', agencyId);
+    promoterIds = promoters?.map(p => p.id) || [];
+    if (promoterIds.length === 0) {
+      return res.json([]);
+    }
+    query = query.in('promoter_id', promoterIds);
   }
-
-  query = query.in('promoter_id', promoterIds);
 
   if (startDate) {
     // Ensure startDate includes the entire day (from 00:00:00)
@@ -243,8 +244,7 @@ export async function getVisit(req: AuthRequest, res: Response) {
     throw new AppError('Visit not found', 404);
   }
 
-  // Verify agency access
-  if ((visit.promoter as any).user.agency_id !== agencyId) {
+  if (req.user?.role !== 'system_admin' && (visit.promoter as any).user.agency_id !== req.agencyId) {
     throw new AppError('Forbidden', 403);
   }
 
@@ -273,18 +273,19 @@ export async function getVisit(req: AuthRequest, res: Response) {
 
 export async function updateVisit(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
   const updates = req.body;
 
-  // Verify visit belongs to agency
   const { data: visit } = await supabase
     .from('visits')
     .select('promoter:promoters(user:users!inner(agency_id))')
     .eq('id', id)
     .single();
 
-  if (!visit || (visit.promoter as any).user.agency_id !== agencyId) {
+  if (!visit) {
     throw new AppError('Visit not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && (visit.promoter as any).user.agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   const { data: updated, error } = await supabase
@@ -307,17 +308,18 @@ export async function updateVisit(req: AuthRequest, res: Response) {
 export async function updateVisitProductPhotos(req: AuthRequest, res: Response) {
   const { visitId, productId } = req.params;
   const { photo_before_url, photo_after_url, notes } = req.body;
-  const agencyId = req.agencyId!;
 
-  // Verify visit belongs to agency
   const { data: visit } = await supabase
     .from('visits')
     .select('promoter:promoters(user:users!inner(agency_id))')
     .eq('id', visitId)
     .single();
 
-  if (!visit || (visit.promoter as any).user.agency_id !== agencyId) {
+  if (!visit) {
     throw new AppError('Visit not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && (visit.promoter as any).user.agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   // Update visit product photos and notes

@@ -1,16 +1,17 @@
 import { Response } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { AuthRequest } from '../middleware/auth.js';
+import { AuthRequest, getEffectiveAgencyId } from '../middleware/auth.js';
 
 export async function listStores(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getEffectiveAgencyId(req, req.query.agency_id as string | undefined);
 
-  const { data: stores, error } = await supabase
-    .from('stores')
-    .select('*')
-    .eq('agency_id', agencyId)
-    .order('chain_name');
+  let query = supabase.from('stores').select('*').order('chain_name');
+  if (agencyId) {
+    query = query.eq('agency_id', agencyId);
+  }
+
+  const { data: stores, error } = await query;
 
   if (error) {
     throw new AppError(`Failed to fetch stores: ${error.message}`, 500);
@@ -20,8 +21,11 @@ export async function listStores(req: AuthRequest, res: Response) {
 }
 
 export async function createStore(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
-  const { chain_name, type, address, gps_latitude, gps_longitude, radius_meters, shelf_layout_pdf_url, product_category, contacts } = req.body;
+  const { agency_id: bodyAgencyId, chain_name, type, address, gps_latitude, gps_longitude, radius_meters, shelf_layout_pdf_url, product_category, contacts } = req.body;
+  const agencyId = req.user?.role === 'system_admin' ? bodyAgencyId : req.agencyId;
+  if (!agencyId) {
+    throw new AppError('Agency scope required (agency_id for system_admin)', 400);
+  }
 
   if (!chain_name || !type || !address || gps_latitude === undefined || gps_longitude === undefined) {
     throw new AppError('Missing required fields', 400);
@@ -63,17 +67,19 @@ export async function createStore(req: AuthRequest, res: Response) {
 
 export async function getStore(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
 
   const { data: store, error } = await supabase
     .from('stores')
     .select('*')
     .eq('id', id)
-    .eq('agency_id', agencyId)
     .single();
 
   if (error || !store) {
     throw new AppError('Store not found', 404);
+  }
+
+  if (req.user?.role !== 'system_admin' && store.agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   // Get contacts
@@ -90,19 +96,19 @@ export async function getStore(req: AuthRequest, res: Response) {
 
 export async function updateStore(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
   const updates = req.body;
 
-  // Verify store belongs to agency
   const { data: store } = await supabase
     .from('stores')
-    .select('id')
+    .select('id, agency_id')
     .eq('id', id)
-    .eq('agency_id', agencyId)
     .single();
 
   if (!store) {
     throw new AppError('Store not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && store.agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   const { data: updated, error } = await supabase
