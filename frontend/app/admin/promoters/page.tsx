@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export default function PromotersPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
   const [promoters, setPromoters] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,7 +41,7 @@ export default function PromotersPage() {
   });
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'agency_admin')) {
+    if (!authLoading && (!user || user.role === 'promoter')) {
       router.push('/admin/login');
     }
   }, [user, authLoading, router]);
@@ -50,15 +50,15 @@ export default function PromotersPage() {
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, effectiveAgencyId]);
 
   async function loadData() {
     try {
       setLoading(true);
       const [promotersData, brandsData, storesData] = await Promise.all([
-        api.listPromoters(),
-        api.listBrands(),
-        api.listStores()
+        api.listPromoters(effectiveAgencyId ?? undefined),
+        api.listBrands(effectiveAgencyId ?? undefined),
+        api.listStores(effectiveAgencyId ?? undefined)
       ]);
       
       setPromoters(promotersData as any[]);
@@ -204,7 +204,7 @@ export default function PromotersPage() {
       } else {
         // Remover photo_url do formData ao criar (foto será enviada separadamente)
         const { photo_url, ...promoterData } = formData;
-        // Criar promotor primeiro
+        if (effectiveAgencyId) (promoterData as any).agency_id = effectiveAgencyId;
         const newPromoter = await api.createPromoter(promoterData) as any;
         
         // Se houver arquivo de foto, fazer upload após criação

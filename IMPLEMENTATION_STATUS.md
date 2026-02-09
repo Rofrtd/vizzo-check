@@ -6,6 +6,7 @@
 
 - ✅ **Backend API**: 100% Complete - All endpoints implemented and tested
 - ✅ **Admin Dashboard**: 100% Complete - All pages and features implemented
+- ✅ **Admin geral vs Agência (Issue #1)**: Implemented — papéis system_admin e agency; escopo cross-agency para admin geral; ver [docs/roles-and-scope.md](docs/roles-and-scope.md)
 - ✅ **Promoter PWA**: ~95% Complete - All core pages implemented, minor enhancements pending
 - 🚧 **PWA Features**: ~30% Complete - Manifest configured, service worker and camera API pending
 
@@ -22,7 +23,8 @@
 
 ### Backend API
 - ✅ Authentication (register, login, JWT)
-- ✅ Agency management
+- ✅ **Roles: system_admin and agency** — Admin geral (cross-agency) vs Agência (escopo restrito); ver [docs/roles-and-scope.md](docs/roles-and-scope.md)
+- ✅ Agency management (list agencies for system_admin; get agency for agency/system_admin)
 - ✅ Promoter CRUD operations
 - ✅ Brand CRUD operations
 - ✅ Store CRUD operations

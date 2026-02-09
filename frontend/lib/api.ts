@@ -74,9 +74,19 @@ export class ApiClient {
     return this.request<{ user: any }>("/api/auth/me");
   }
 
+  // Agencies (system_admin only)
+  async listAgencies() {
+    return this.request("/api/agencies");
+  }
+
+  async getAgency(id: string) {
+    return this.request(`/api/agencies/${id}`);
+  }
+
   // Promoters
-  async listPromoters() {
-    return this.request("/api/promoters");
+  async listPromoters(agencyId?: string | null) {
+    const q = agencyId ? `?agency_id=${encodeURIComponent(agencyId)}` : "";
+    return this.request(`/api/promoters${q}`);
   }
 
   async createPromoter(data: any) {
@@ -104,8 +114,9 @@ export class ApiClient {
   }
 
   // Brands
-  async listBrands() {
-    return this.request("/api/brands");
+  async listBrands(agencyId?: string | null) {
+    const q = agencyId ? `?agency_id=${encodeURIComponent(agencyId)}` : "";
+    return this.request(`/api/brands${q}`);
   }
 
   async createBrand(data: any) {
@@ -147,8 +158,9 @@ export class ApiClient {
   }
 
   // Stores
-  async listStores() {
-    return this.request("/api/stores");
+  async listStores(agencyId?: string | null) {
+    const q = agencyId ? `?agency_id=${encodeURIComponent(agencyId)}` : "";
+    return this.request(`/api/stores${q}`);
   }
 
   async getAuthorizedStores() {
@@ -178,12 +190,12 @@ export class ApiClient {
   }
 
   // Visits
-  async listVisits(filters?: any) {
+  async listVisits(filters?: { agency_id?: string; startDate?: string; endDate?: string; promoter_id?: string; store_id?: string; brand_id?: string; status?: string }) {
     const params = new URLSearchParams();
     if (filters) {
-      Object.keys(filters).forEach((key) => {
-        if (filters[key]) {
-          params.append(key, filters[key]);
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value != null && value !== "") {
+          params.append(key, String(value));
         }
       });
     }
@@ -234,13 +246,13 @@ export class ApiClient {
     });
   }
 
-  // Reports
-  async getFinancialReport(query?: any) {
+  // Reports (pass agency_id in query for system_admin)
+  async getFinancialReport(query?: Record<string, string>) {
     const params = new URLSearchParams(query).toString();
     return this.request(`/api/reports/financial${params ? `?${params}` : ""}`);
   }
 
-  async exportFinancialReport(format: "csv" | "pdf", query?: any) {
+  async exportFinancialReport(format: "csv" | "pdf", query?: Record<string, string>) {
     const params = new URLSearchParams({ ...query, format }).toString();
     const token = this.getToken();
     const response = await fetch(
@@ -267,43 +279,45 @@ export class ApiClient {
     document.body.removeChild(a);
   }
 
-  async getPromoterReport(query?: any) {
+  async getPromoterReport(query?: Record<string, string>) {
     const params = new URLSearchParams(query).toString();
     return this.request(`/api/reports/promoters${params ? `?${params}` : ""}`);
   }
 
-  async getBrandReport(query?: any) {
+  async getBrandReport(query?: Record<string, string>) {
     const params = new URLSearchParams(query).toString();
     return this.request(`/api/reports/brands${params ? `?${params}` : ""}`);
   }
 
-  async getStoreReport(query?: any) {
+  async getStoreReport(query?: Record<string, string>) {
     const params = new URLSearchParams(query).toString();
     return this.request(`/api/reports/stores${params ? `?${params}` : ""}`);
   }
 
-  async getToBePaidReport(query?: any) {
+  async getToBePaidReport(query?: Record<string, string>) {
     const params = new URLSearchParams(query).toString();
     return this.request(`/api/reports/to-be-paid${params ? `?${params}` : ""}`);
   }
 
-  async getToBeReceivedReport(query?: any) {
+  async getToBeReceivedReport(query?: Record<string, string>) {
     const params = new URLSearchParams(query).toString();
     return this.request(
       `/api/reports/to-be-received${params ? `?${params}` : ""}`,
     );
   }
 
-  async getPlannedVisits(startDate?: string, endDate?: string) {
-    const params = new URLSearchParams();
-    if (startDate) params.append("startDate", startDate);
-    if (endDate) params.append("endDate", endDate);
-    const queryString = params.toString();
+  async getPlannedVisits(params?: { startDate?: string; endDate?: string; agency_id?: string }) {
+    const search = new URLSearchParams();
+    if (params?.startDate) search.append("startDate", params.startDate);
+    if (params?.endDate) search.append("endDate", params.endDate);
+    if (params?.agency_id) search.append("agency_id", params.agency_id);
+    const queryString = search.toString();
     return this.request(`/api/reports/planned-visits${queryString ? `?${queryString}` : ""}`);
   }
 
-  async getBrandsWithoutAllocations() {
-    return this.request("/api/reports/brands-without-allocations");
+  async getBrandsWithoutAllocations(agencyId?: string | null) {
+    const q = agencyId ? `?agency_id=${encodeURIComponent(agencyId)}` : "";
+    return this.request(`/api/reports/brands-without-allocations${q}`);
   }
 
   // Upload
@@ -434,15 +448,15 @@ export class ApiClient {
     return response.json();
   }
 
-  // Allocation methods
-  async getAllocations(filters?: { promoter_id?: string; brand_id?: string; store_id?: string }) {
+  // Allocation methods (pass agency_id for system_admin)
+  async getAllocations(filters?: { promoter_id?: string; brand_id?: string; store_id?: string; agency_id?: string }) {
     const queryParams = new URLSearchParams();
-    if (filters?.promoter_id) queryParams.append('promoter_id', filters.promoter_id);
-    if (filters?.brand_id) queryParams.append('brand_id', filters.brand_id);
-    if (filters?.store_id) queryParams.append('store_id', filters.store_id);
-    
+    if (filters?.promoter_id) queryParams.append("promoter_id", filters.promoter_id);
+    if (filters?.brand_id) queryParams.append("brand_id", filters.brand_id);
+    if (filters?.store_id) queryParams.append("store_id", filters.store_id);
+    if (filters?.agency_id) queryParams.append("agency_id", filters.agency_id);
     const query = queryParams.toString();
-    return this.request(`/api/allocations${query ? `?${query}` : ''}`);
+    return this.request(`/api/allocations${query ? `?${query}` : ""}`);
   }
 
   async getAllocation(id: string) {
@@ -456,6 +470,7 @@ export class ApiClient {
     days_of_week: number[];
     frequency_per_week: number;
     active?: boolean;
+    agency_id?: string;
   }) {
     return this.request("/api/allocations", {
       method: "POST",

@@ -20,7 +20,7 @@ export default function VisitDetailPage() {
   const [notes, setNotes] = useState('');
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'agency_admin')) {
+    if (!authLoading && (!user || user.role === 'promoter')) {
       router.push('/admin/login');
     }
   }, [user, authLoading, router]);

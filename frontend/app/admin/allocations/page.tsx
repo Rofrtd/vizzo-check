@@ -16,7 +16,7 @@ const DAYS_OF_WEEK = [
 ];
 
 export default function AllocationsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
   const [allocations, setAllocations] = useState<any[]>([]);
   const [promoters, setPromoters] = useState<any[]>([]);
@@ -64,7 +64,7 @@ export default function AllocationsPage() {
   });
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'agency_admin')) {
+    if (!authLoading && (!user || user.role === 'promoter')) {
       router.push('/admin/login');
     }
   }, [user, authLoading, router]);
@@ -73,17 +73,19 @@ export default function AllocationsPage() {
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, effectiveAgencyId]);
 
   async function loadData() {
     try {
       setLoading(true);
+      const allocationFilters: { promoter_id?: string; brand_id?: string; store_id?: string; agency_id?: string } = { ...filters };
+      if (effectiveAgencyId) allocationFilters.agency_id = effectiveAgencyId;
       const [allocationsData, promotersData, brandsData, storesData, brandsWithoutAllocs] = await Promise.all([
-        api.getAllocations(),
-        api.listPromoters(),
-        api.listBrands(),
-        api.listStores(),
-        api.getBrandsWithoutAllocations()
+        api.getAllocations(allocationFilters),
+        api.listPromoters(effectiveAgencyId ?? undefined),
+        api.listBrands(effectiveAgencyId ?? undefined),
+        api.listStores(effectiveAgencyId ?? undefined),
+        api.getBrandsWithoutAllocations(effectiveAgencyId ?? undefined)
       ]);
       
       setAllocations(allocationsData as any[]);
@@ -265,16 +267,16 @@ export default function AllocationsPage() {
         const allocationsToCreate = [];
         for (const group of formData.brandStoreGroups) {
           for (const store of group.stores) {
-            allocationsToCreate.push(
-              api.createAllocation({
-                promoter_id: formData.promoter_id,
-                brand_id: group.brand_id,
-                store_id: store.store_id,
-                days_of_week: store.days_of_week,
-                frequency_per_week: store.frequency_per_week,
-                active: formData.active
-              })
-            );
+            const allocPayload: any = {
+              promoter_id: formData.promoter_id,
+              brand_id: group.brand_id,
+              store_id: store.store_id,
+              days_of_week: store.days_of_week,
+              frequency_per_week: store.frequency_per_week,
+              active: formData.active
+            };
+            if (effectiveAgencyId) allocPayload.agency_id = effectiveAgencyId;
+            allocationsToCreate.push(api.createAllocation(allocPayload));
           }
         }
         
