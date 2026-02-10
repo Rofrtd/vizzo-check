@@ -3,12 +3,14 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { usePanel } from '@/lib/PanelContext';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 
 export default function AdminAgenciesPage() {
   const { user, loading: authLoading, selectedAgencyId, setSelectedAgencyId } = useAuth();
   const router = useRouter();
+  const { basePath } = usePanel();
   const [agencies, setAgencies] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -18,7 +20,7 @@ export default function AdminAgenciesPage() {
       return;
     }
     if (user && user.role !== 'system_admin') {
-      router.push('/admin/dashboard');
+      router.push(`${basePath}/dashboard`);
       return;
     }
   }, [user, authLoading, router]);
@@ -58,7 +60,7 @@ export default function AdminAgenciesPage() {
                 type="button"
                 onClick={() => {
                   setSelectedAgencyId(agency.id);
-                  router.push('/admin/dashboard');
+                  router.push('/admin/dashboard'); // agencies page is system_admin only; always go to admin panel
                 }}
                 className={`w-full rounded-lg border p-4 text-left shadow-sm transition ${
                   selectedAgencyId === agency.id
@@ -77,7 +79,7 @@ export default function AdminAgenciesPage() {
       )}
 
       <p className="text-sm text-gray-500">
-        <Link href="/admin/dashboard" className="text-blue-600 hover:underline">
+        <Link href={`${basePath}/dashboard`} className="text-blue-600 hover:underline">
           Voltar ao dashboard
         </Link>
       </p>

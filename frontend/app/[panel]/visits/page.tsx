@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { usePanel } from '@/lib/PanelContext';
 import { api } from '@/lib/api';
 import Link from 'next/link';
 
@@ -11,6 +12,7 @@ const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 export default function VisitsPage() {
   const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
+  const { basePath } = usePanel();
   const [visits, setVisits] = useState<any[]>([]);
   const [promoters, setPromoters] = useState<any[]>([]);
   const [stores, setStores] = useState<any[]>([]);
@@ -401,7 +403,7 @@ export default function VisitsPage() {
                     </td>
                     <td className="px-6 py-2.5 whitespace-nowrap">
                       <Link
-                        href={`/admin/visits/${visit.id}`}
+                        href={`${basePath}/visits/${visit.id}`}
                         className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-blue-600 hover:text-blue-800 hover:bg-blue-100 rounded-lg transition-all duration-200 group-hover:bg-blue-200 group-hover:text-blue-800 group-hover:shadow-sm"
                       >
                         <span>Ver</span>

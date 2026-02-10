@@ -3,12 +3,14 @@
 import { useEffect, useState, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { usePanel } from '@/lib/PanelContext';
 import { api } from '@/lib/api';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function AdminDashboard() {
   const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
+  const { basePath } = usePanel();
   const [stats, setStats] = useState({
     activePromoters: 0
   });
@@ -226,7 +228,7 @@ export default function AdminDashboard() {
           Para ver o dashboard e as métricas, selecione uma agência em <strong>Agências</strong> no menu.
         </p>
         <a
-          href="/admin/agencies"
+          href={`${basePath}/agencies`}
           className="mt-4 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
         >
           Ir para Agências
@@ -458,7 +460,7 @@ export default function AdminDashboard() {
                     </div>
                     <div className="mt-4">
                       <a
-                        href="/admin/allocations"
+                        href={`${basePath}/allocations`}
                         className="text-sm font-medium text-yellow-800 hover:text-yellow-900 underline"
                       >
                         Ver detalhes e criar alocações →

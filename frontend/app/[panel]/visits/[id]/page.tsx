@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { usePanel } from '@/lib/PanelContext';
 import { api } from '@/lib/api';
 import dynamic from 'next/dynamic';
 
@@ -13,6 +14,7 @@ export default function VisitDetailPage() {
   const { user, loading: authLoading } = useAuth();
   const router = useRouter();
   const params = useParams();
+  const { basePath } = usePanel();
   const visitId = params.id as string;
   const [visit, setVisit] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -73,7 +75,7 @@ export default function VisitDetailPage() {
   return (
     <>
           <div className="mb-6">
-            <a href="/admin/visits" className="text-blue-600 hover:text-blue-800 text-sm mb-2 inline-block">← Voltar para Visitas</a>
+            <a href={`${basePath}/visits`} className="text-blue-600 hover:text-blue-800 text-sm mb-2 inline-block">← Voltar para Visitas</a>
             <h1 className="text-3xl font-bold text-gray-900">Detalhes da Visita</h1>
           </div>
           {/* Visit Info */}

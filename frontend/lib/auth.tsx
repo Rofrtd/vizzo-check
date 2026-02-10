@@ -15,8 +15,8 @@ export interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (data: { email: string; password: string; agency_name: string; admin_name: string }) => Promise<void>;
+  login: (email: string, password: string) => Promise<User>;
+  register: (data: { email: string; password: string; agency_name: string; admin_name: string }) => Promise<User>;
   logout: () => void;
   /** For system_admin: selected agency context. For agency: always user.agency_id. */
   selectedAgencyId: string | null;
@@ -65,16 +65,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   }
 
-  async function login(email: string, password: string) {
+  async function login(email: string, password: string): Promise<User> {
     const { token, user } = await api.login(email, password);
     api.setToken(token);
     setUser(user);
+    return user;
   }
 
-  async function register(data: { email: string; password: string; agency_name: string; admin_name: string }) {
+  async function register(data: { email: string; password: string; agency_name: string; admin_name: string }): Promise<User> {
     const { token, user } = await api.register(data);
     api.setToken(token);
     setUser(user);
+    return user;
   }
 
   function logout() {

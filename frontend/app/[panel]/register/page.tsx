@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { usePanel } from '@/lib/PanelContext';
 import Link from 'next/link';
 
 export default function AdminRegister() {
@@ -17,6 +18,7 @@ export default function AdminRegister() {
   const [loading, setLoading] = useState(false);
   const { register } = useAuth();
   const router = useRouter();
+  const { basePath } = usePanel();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -42,7 +44,7 @@ export default function AdminRegister() {
         agency_name: formData.agency_name,
         admin_name: formData.admin_name
       });
-      router.push('/admin/dashboard');
+      router.push('/agency/dashboard');
     } catch (err: any) {
       setError(err.message || 'Falha no cadastro');
     } finally {
@@ -141,7 +143,7 @@ export default function AdminRegister() {
             {loading ? 'Criando conta...' : 'Criar Conta'}
           </button>
           <div className="text-center">
-            <Link href="/admin/login" className="text-sm text-blue-600 hover:text-blue-800">
+            <Link href={`${basePath}/login`} className="text-sm text-blue-600 hover:text-blue-800">
               Já tem uma conta? Entrar
             </Link>
           </div>

@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useAuth } from "@/lib/auth";
+import { usePanel } from "@/lib/PanelContext";
 import { api } from "@/lib/api";
 
 type ReportType =
@@ -16,6 +17,7 @@ type ReportType =
 export default function FinancialPage() {
   const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
+  const { basePath } = usePanel();
   const [activeTab, setActiveTab] = useState<ReportType>("summary");
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState({
@@ -116,7 +118,7 @@ export default function FinancialPage() {
           Para ver os relatórios financeiros, selecione uma agência em <strong>Agências</strong> no menu.
         </p>
         <a
-          href="/admin/agencies"
+          href={`${basePath}/agencies`}
           className="mt-4 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
         >
           Ir para Agências

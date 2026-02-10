@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth';
+import { usePanel } from '@/lib/PanelContext';
 import Link from 'next/link';
 
 export default function AdminLogin() {
@@ -12,6 +13,7 @@ export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const router = useRouter();
+  const { basePath } = usePanel();
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -19,8 +21,11 @@ export default function AdminLogin() {
     setLoading(true);
 
     try {
-      await login(email, password);
-      router.push('/admin/dashboard');
+      const user = await login(email, password);
+      if (user.role === 'system_admin') router.push('/admin/dashboard');
+      else if (user.role === 'agency') router.push('/agency/dashboard');
+      else if (user.role === 'promoter') router.push('/promoter');
+      else router.push('/admin/dashboard');
     } catch (err: any) {
       setError(err.message || 'Falha no login');
     } finally {
@@ -77,7 +82,7 @@ export default function AdminLogin() {
             {loading ? 'Entrando...' : 'Entrar'}
           </button>
           <div className="text-center">
-            <Link href="/admin/register" className="text-sm text-blue-600 hover:text-blue-800">
+            <Link href={`${basePath}/register`} className="text-sm text-blue-600 hover:text-blue-800">
               Não tem uma conta? Criar conta
             </Link>
           </div>
