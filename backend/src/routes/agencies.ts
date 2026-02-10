@@ -1,9 +1,10 @@
 import express from 'express';
-import { getAgency } from '../controllers/agencies.js';
-import { authenticate } from '../middleware/auth.js';
+import { listAgencies, getAgency } from '../controllers/agencies.js';
+import { authenticate, requireRole } from '../middleware/auth.js';
 
 const router = express.Router();
 
-router.get('/:id', authenticate, getAgency);
+router.get('/', authenticate, requireRole(['system_admin']), listAgencies);
+router.get('/:id', authenticate, requireRole(['agency', 'system_admin']), getAgency);
 
 export default router;

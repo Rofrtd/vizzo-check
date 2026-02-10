@@ -2,18 +2,18 @@ import { Response } from 'express';
 import bcrypt from 'bcryptjs';
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { AuthRequest } from '../middleware/auth.js';
+import { AuthRequest, getEffectiveAgencyId } from '../middleware/auth.js';
 
 export async function listPromoters(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getEffectiveAgencyId(req, req.query.agency_id as string | undefined);
 
-  const { data: promoters, error } = await supabase
+  let query = supabase
     .from('promoters')
-    .select(`
-      *,
-      user:users(id, email, role, agency_id)
-    `)
-    .eq('user.agency_id', agencyId);
+    .select(`*, user:users(id, email, role, agency_id)`);
+  if (agencyId) {
+    query = query.eq('user.agency_id', agencyId);
+  }
+  const { data: promoters, error } = await query;
 
   if (error) {
     throw new AppError(`Failed to fetch promoters: ${error.message}`, 500);
@@ -48,8 +48,11 @@ export async function listPromoters(req: AuthRequest, res: Response) {
 }
 
 export async function createPromoter(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
-  const { email, password, name, phone, city, brand_ids, store_ids, availability_days, payment_per_visit } = req.body;
+  const { agency_id: bodyAgencyId, email, password, name, phone, city, brand_ids, store_ids, availability_days, payment_per_visit } = req.body;
+  const agencyId = req.user?.role === 'system_admin' ? bodyAgencyId : req.agencyId;
+  if (!agencyId) {
+    throw new AppError('Agency scope required (agency_id for system_admin)', 400);
+  }
 
   if (!email || !password || !name || !phone || !city) {
     throw new AppError('Missing required fields', 400);
@@ -129,21 +132,18 @@ export async function createPromoter(req: AuthRequest, res: Response) {
 
 export async function getPromoter(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
 
-  // Get promoter with user info
   const { data: promoter, error } = await supabase
     .from('promoters')
-    .select(`
-      *,
-      user:users!inner(id, email, role, agency_id)
-    `)
+    .select(`*, user:users!inner(id, email, role, agency_id)`)
     .eq('id', id)
-    .eq('user.agency_id', agencyId)
     .single();
 
   if (error || !promoter) {
     throw new AppError('Promoter not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && (promoter.user as any).agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   // Get assigned brands and stores
@@ -167,18 +167,19 @@ export async function getPromoter(req: AuthRequest, res: Response) {
 
 export async function updatePromoter(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
   const updates = req.body;
 
-  // Verify promoter belongs to agency
   const { data: promoter } = await supabase
     .from('promoters')
     .select('user:users!inner(agency_id)')
     .eq('id', id)
     .single();
 
-  if (!promoter || (promoter.user as any).agency_id !== agencyId) {
+  if (!promoter) {
     throw new AppError('Promoter not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && (promoter.user as any).agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   // Update promoter
@@ -229,17 +230,18 @@ export async function updatePromoter(req: AuthRequest, res: Response) {
 
 export async function toggleActive(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
 
-  // Verify promoter belongs to agency
   const { data: promoter } = await supabase
     .from('promoters')
     .select('active, user:users!inner(agency_id)')
     .eq('id', id)
     .single();
 
-  if (!promoter || (promoter.user as any).agency_id !== agencyId) {
+  if (!promoter) {
     throw new AppError('Promoter not found', 404);
+  }
+  if (req.user?.role !== 'system_admin' && (promoter.user as any).agency_id !== req.agencyId) {
+    throw new AppError('Forbidden', 403);
   }
 
   const { data: updated, error } = await supabase

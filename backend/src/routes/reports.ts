@@ -15,7 +15,7 @@ import { authenticate, requireRole } from '../middleware/auth.js';
 const router = express.Router();
 
 router.use(authenticate);
-router.use(requireRole(['agency_admin']));
+router.use(requireRole(['agency', 'system_admin']));
 
 router.get('/financial', getFinancialReport);
 router.get('/financial/export', exportFinancialReport);

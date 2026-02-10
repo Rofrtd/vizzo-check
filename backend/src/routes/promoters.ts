@@ -18,10 +18,10 @@ router.use(authenticate);
 router.get('/earnings/my', getMyEarnings);
 
 // Admin only routes
-router.get('/', requireRole(['agency_admin']), listPromoters);
-router.post('/', requireRole(['agency_admin']), createPromoter);
+router.get('/', requireRole(['agency', 'system_admin']), listPromoters);
+router.post('/', requireRole(['agency', 'system_admin']), createPromoter);
 router.get('/:id', getPromoter);
-router.put('/:id', requireRole(['agency_admin']), updatePromoter);
-router.patch('/:id/active', requireRole(['agency_admin']), toggleActive);
+router.put('/:id', requireRole(['agency', 'system_admin']), updatePromoter);
+router.patch('/:id/active', requireRole(['agency', 'system_admin']), toggleActive);
 
 export default router;

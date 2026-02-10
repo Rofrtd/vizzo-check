@@ -13,11 +13,22 @@ interface MenuItem {
   badge?: number;
 }
 
+const agenciesMenuItem: MenuItem = {
+  title: 'Agências',
+  href: '/admin/agencies',
+  icon: (
+    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+    </svg>
+  )
+};
+
 export default function AdminSidebar() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
   const { user, logout } = useAuth();
   const router = useRouter();
+  const isSystemAdmin = user?.role === 'system_admin';
 
   function handleLogout() {
     logout();
@@ -25,6 +36,7 @@ export default function AdminSidebar() {
   }
 
   const menuItems: MenuItem[] = [
+    ...(isSystemAdmin ? [agenciesMenuItem] : []),
     {
       title: 'Dashboard',
       href: '/admin/dashboard',
@@ -92,6 +104,9 @@ export default function AdminSidebar() {
 
   const isActive = (href: string) => {
     if (href === '/admin/dashboard') {
+      return pathname === href;
+    }
+    if (href === '/admin/agencies') {
       return pathname === href;
     }
     return pathname.startsWith(href);
@@ -223,7 +238,9 @@ export default function AdminSidebar() {
         {/* User section */}
         <div className="p-4 border-t border-gray-700">
           <div className="mb-3 px-4 py-2 rounded-lg bg-gray-800/50">
-            <p className="text-xs text-gray-400 mb-1">Usuário</p>
+            <p className="text-xs text-gray-400 mb-1">
+              {isSystemAdmin ? 'Admin geral' : 'Agência'}
+            </p>
             <p className="text-sm font-medium text-white truncate">{user?.email}</p>
           </div>
           <button

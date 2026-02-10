@@ -14,7 +14,7 @@ type ReportType =
   | "to-be-received";
 
 export default function FinancialPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
   const [activeTab, setActiveTab] = useState<ReportType>("summary");
   const [loading, setLoading] = useState(true);
@@ -22,6 +22,7 @@ export default function FinancialPage() {
     startDate: "",
     endDate: "",
   });
+  const isSystemAdminWithoutAgency = user?.role === "system_admin" && !effectiveAgencyId;
 
   // Report data
   const [summaryReport, setSummaryReport] = useState<any>(null);
@@ -32,23 +33,24 @@ export default function FinancialPage() {
   const [toBeReceivedReport, setToBeReceivedReport] = useState<any[]>([]);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "agency_admin")) {
+    if (!authLoading && (!user || user.role === 'promoter')) {
       router.push("/admin/login");
     }
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (user) {
+    if (user && !isSystemAdminWithoutAgency) {
       loadReports();
     }
-  }, [user, filters, activeTab]);
+  }, [user, filters, activeTab, effectiveAgencyId, isSystemAdminWithoutAgency]);
 
   async function loadReports() {
     try {
       setLoading(true);
-      const query: any = {};
+      const query: Record<string, string> = {};
       if (filters.startDate) query.startDate = filters.startDate;
       if (filters.endDate) query.endDate = filters.endDate;
+      if (effectiveAgencyId) query.agency_id = effectiveAgencyId;
 
       // Load reports based on active tab
       if (activeTab === "summary") {
@@ -102,6 +104,23 @@ export default function FinancialPage() {
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
           <p className="mt-4 text-gray-600">Carregando...</p>
         </div>
+      </div>
+    );
+  }
+
+  if (isSystemAdminWithoutAgency) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800">
+        <p className="font-medium">Selecione uma agência</p>
+        <p className="mt-1 text-sm">
+          Para ver os relatórios financeiros, selecione uma agência em <strong>Agências</strong> no menu.
+        </p>
+        <a
+          href="/admin/agencies"
+          className="mt-4 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+        >
+          Ir para Agências
+        </a>
       </div>
     );
   }

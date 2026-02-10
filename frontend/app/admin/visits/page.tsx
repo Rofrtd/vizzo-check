@@ -9,7 +9,7 @@ import Link from 'next/link';
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export default function VisitsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
   const [visits, setVisits] = useState<any[]>([]);
   const [promoters, setPromoters] = useState<any[]>([]);
@@ -41,7 +41,7 @@ export default function VisitsPage() {
   const [filters, setFilters] = useState(getDefaultFilters());
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== 'agency_admin')) {
+    if (!authLoading && (!user || user.role === 'promoter')) {
       router.push('/admin/login');
     }
   }, [user, authLoading, router]);
@@ -50,16 +50,18 @@ export default function VisitsPage() {
     if (user) {
       loadData();
     }
-  }, [user, filters]);
+  }, [user, filters, effectiveAgencyId]);
 
   async function loadData() {
     try {
       setLoading(true);
+      const visitFilters = { ...filters };
+      if (effectiveAgencyId) (visitFilters as any).agency_id = effectiveAgencyId;
       const [visitsData, promotersData, storesData, brandsData] = await Promise.all([
-        api.listVisits(filters),
-        api.listPromoters(),
-        api.listStores(),
-        api.listBrands()
+        api.listVisits(visitFilters),
+        api.listPromoters(effectiveAgencyId ?? undefined),
+        api.listStores(effectiveAgencyId ?? undefined),
+        api.listBrands(effectiveAgencyId ?? undefined)
       ]);
       
       setVisits(visitsData as any[]);

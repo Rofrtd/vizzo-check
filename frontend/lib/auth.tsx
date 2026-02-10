@@ -3,11 +3,13 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
 import { api } from './api';
 
-interface User {
+export type UserRole = 'system_admin' | 'agency' | 'promoter';
+
+export interface User {
   id: string;
   email: string;
-  role: 'agency_admin' | 'promoter';
-  agency_id: string;
+  role: UserRole;
+  agency_id: string | null;
 }
 
 interface AuthContextType {
@@ -16,6 +18,11 @@ interface AuthContextType {
   login: (email: string, password: string) => Promise<void>;
   register: (data: { email: string; password: string; agency_name: string; admin_name: string }) => Promise<void>;
   logout: () => void;
+  /** For system_admin: selected agency context. For agency: always user.agency_id. */
+  selectedAgencyId: string | null;
+  setSelectedAgencyId: (id: string | null) => void;
+  /** Resolved agency scope for API calls: selected agency for system_admin, user.agency_id for agency. */
+  effectiveAgencyId: string | null;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -23,9 +30,14 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [selectedAgencyId, setSelectedAgencyId] = useState<string | null>(null);
+
+  const effectiveAgencyId =
+    user?.role === 'system_admin'
+      ? selectedAgencyId
+      : user?.agency_id ?? null;
 
   useEffect(() => {
-    // Check for existing token
     const token = api.getToken();
     if (token) {
       api.setToken(token);
@@ -34,6 +46,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setLoading(false);
     }
   }, []);
+
+  useEffect(() => {
+    if (user?.role !== 'system_admin') {
+      setSelectedAgencyId(null);
+    }
+  }, [user?.role]);
 
   async function loadUser() {
     try {
@@ -62,10 +80,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   function logout() {
     api.setToken(null);
     setUser(null);
+    setSelectedAgencyId(null);
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, register, logout }}>
+    <AuthContext.Provider
+      value={{
+        user,
+        loading,
+        login,
+        register,
+        logout,
+        selectedAgencyId,
+        setSelectedAgencyId,
+        effectiveAgencyId,
+      }}
+    >
       {children}
     </AuthContext.Provider>
   );

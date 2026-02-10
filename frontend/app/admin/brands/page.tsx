@@ -8,7 +8,7 @@ import { api } from "@/lib/api";
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export default function BrandsPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
   const [brands, setBrands] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -40,7 +40,7 @@ export default function BrandsPage() {
   const [savingProduct, setSavingProduct] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "agency_admin")) {
+    if (!authLoading && (!user || user.role === 'promoter')) {
       router.push("/admin/login");
     }
   }, [user, authLoading, router]);
@@ -49,14 +49,14 @@ export default function BrandsPage() {
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, effectiveAgencyId]);
 
   async function loadData() {
     try {
       setLoading(true);
       const [brandsData, storesData] = await Promise.all([
-        api.listBrands(),
-        api.listStores(),
+        api.listBrands(effectiveAgencyId ?? undefined),
+        api.listStores(effectiveAgencyId ?? undefined),
       ]);
 
       setBrands((brandsData as any[]) || []);
@@ -146,8 +146,8 @@ export default function BrandsPage() {
       if (editing) {
         await api.updateBrand(editing.id, formData);
       } else {
-        // Criar marca primeiro
-        const newBrand = (await api.createBrand(formData)) as any;
+        const createPayload = effectiveAgencyId ? { ...formData, agency_id: effectiveAgencyId } : formData;
+        const newBrand = (await api.createBrand(createPayload)) as any;
 
         // Se houver arquivo de logo, fazer upload após criação
         if (logoFile && newBrand?.id) {

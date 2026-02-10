@@ -7,7 +7,7 @@ import { api } from '@/lib/api';
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 export default function AdminDashboard() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
   const [stats, setStats] = useState({
     activePromoters: 0
@@ -19,6 +19,7 @@ export default function AdminDashboard() {
   const [brands, setBrands] = useState<any[]>([]);
   const [plannedVisits, setPlannedVisits] = useState<any>(null);
   const [brandsWithoutAllocations, setBrandsWithoutAllocations] = useState<any[]>([]);
+  const isSystemAdminWithoutAgency = user?.role === 'system_admin' && !effectiveAgencyId;
   
   // Helper to format date as YYYY-MM-DD in local timezone
   const formatDateLocal = (date: Date): string => {
@@ -47,32 +48,32 @@ export default function AdminDashboard() {
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/admin/login');
-    } else if (user && user.role !== 'agency_admin') {
+    } else if (user?.role === 'promoter') {
       router.push('/promoter');
     }
   }, [user, authLoading, router]);
 
   useEffect(() => {
-    if (user) {
+    if (user && user.role !== 'promoter') {
       loadOptions();
       loadStats();
     }
-  }, [user]);
+  }, [user, effectiveAgencyId]);
 
   useEffect(() => {
-    if (user) {
+    if (user && user.role !== 'promoter') {
       loadStats();
     }
-  }, [filters]);
+  }, [filters, effectiveAgencyId]);
 
   async function loadOptions() {
     try {
       const [promotersData, storesData, brandsData] = await Promise.all([
-        api.listPromoters(),
-        api.listStores(),
-        api.listBrands()
+        api.listPromoters(effectiveAgencyId ?? undefined),
+        api.listStores(effectiveAgencyId ?? undefined),
+        api.listBrands(effectiveAgencyId ?? undefined)
       ]);
-      
+
       setPromoters((promotersData as any[]) || []);
       setStores((storesData as any[]) || []);
       setBrands((brandsData as any[]) || []);
@@ -82,6 +83,13 @@ export default function AdminDashboard() {
   }
 
   async function loadStats() {
+    if (isSystemAdminWithoutAgency) {
+      setVisits([]);
+      setPlannedVisits(null);
+      setBrandsWithoutAllocations([]);
+      setStats({ activePromoters: 0 });
+      return;
+    }
     try {
       setLoading(true);
       const queryParams: any = {};
@@ -91,13 +99,17 @@ export default function AdminDashboard() {
       if (filters.store_id) queryParams.store_id = filters.store_id;
       if (filters.brand_id) queryParams.brand_id = filters.brand_id;
       if (filters.status) queryParams.status = filters.status;
+      if (effectiveAgencyId) queryParams.agency_id = effectiveAgencyId;
 
-      // Use filter dates for planned visits calculation
       const [visitsData, promotersData, plannedData, brandsWithoutAllocs] = await Promise.all([
         api.listVisits(queryParams),
-        api.listPromoters(),
-        api.getPlannedVisits(filters.startDate, filters.endDate),
-        api.getBrandsWithoutAllocations()
+        api.listPromoters(effectiveAgencyId ?? undefined),
+        api.getPlannedVisits({
+          startDate: filters.startDate,
+          endDate: filters.endDate,
+          agency_id: effectiveAgencyId ?? undefined
+        }),
+        api.getBrandsWithoutAllocations(effectiveAgencyId ?? undefined)
       ]);
       
       const visits = (visitsData as any[]) || [];
@@ -204,6 +216,23 @@ export default function AdminDashboard() {
 
   if (!user) {
     return null;
+  }
+
+  if (isSystemAdminWithoutAgency) {
+    return (
+      <div className="rounded-lg border border-amber-200 bg-amber-50 p-6 text-amber-800">
+        <p className="font-medium">Selecione uma agência</p>
+        <p className="mt-1 text-sm">
+          Para ver o dashboard e as métricas, selecione uma agência em <strong>Agências</strong> no menu.
+        </p>
+        <a
+          href="/admin/agencies"
+          className="mt-4 inline-block rounded-md bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700"
+        >
+          Ir para Agências
+        </a>
+      </div>
+    );
   }
 
   return (

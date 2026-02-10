@@ -1,11 +1,19 @@
 import { Response } from 'express';
 import { supabase } from '../lib/supabase.js';
 import { AppError } from '../middleware/errorHandler.js';
-import { AuthRequest } from '../middleware/auth.js';
+import { AuthRequest, getEffectiveAgencyId } from '../middleware/auth.js';
 import { getSuggestedDays } from '../services/allocationSuggestions.js';
 
+function getAllocationAgencyId(req: AuthRequest): string {
+  const agencyId = getEffectiveAgencyId(req, (req.query.agency_id || req.body?.agency_id) as string | undefined);
+  if (!agencyId) {
+    throw new AppError('Agency scope required (agency_id for system_admin)', 400);
+  }
+  return agencyId;
+}
+
 export async function listAllocations(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
+  const agencyId = getAllocationAgencyId(req);
 
   // Get user IDs for this agency
   const { data: users } = await supabase
@@ -102,7 +110,7 @@ export async function listAllocations(req: AuthRequest, res: Response) {
 
 export async function getAllocation(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
+  const agencyId = getAllocationAgencyId(req);
 
   // Get user IDs for this agency
   const { data: users } = await supabase
@@ -175,8 +183,11 @@ export async function getAllocation(req: AuthRequest, res: Response) {
 }
 
 export async function createAllocation(req: AuthRequest, res: Response) {
-  const agencyId = req.agencyId!;
-  const { promoter_id, brand_id, store_id, days_of_week, frequency_per_week, active } = req.body;
+  const { agency_id: bodyAgencyId, promoter_id, brand_id, store_id, days_of_week, frequency_per_week, active } = req.body;
+  const agencyId = req.user?.role === 'system_admin' ? bodyAgencyId : getEffectiveAgencyId(req, undefined);
+  if (!agencyId) {
+    throw new AppError('Agency scope required (agency_id for system_admin)', 400);
+  }
 
   // Validate required fields
   if (!promoter_id || !brand_id || !store_id || !days_of_week || !Array.isArray(days_of_week)) {
@@ -314,20 +325,7 @@ export async function createAllocation(req: AuthRequest, res: Response) {
 
 export async function updateAllocation(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
   const { days_of_week, frequency_per_week, active } = req.body;
-
-  // Verify allocation belongs to agency
-  const { data: users } = await supabase
-    .from('users')
-    .select('id')
-    .eq('agency_id', agencyId);
-
-  if (!users || users.length === 0) {
-    throw new AppError('Allocation not found', 404);
-  }
-
-  const userIds = users.map(u => u.id);
 
   const { data: allocation } = await supabase
     .from('promoter_allocations')
@@ -339,33 +337,27 @@ export async function updateAllocation(req: AuthRequest, res: Response) {
     throw new AppError('Allocation not found', 404);
   }
 
-  // Verify agency ownership
   const [promoterResult, brandResult, storeResult] = await Promise.all([
-    supabase
-      .from('promoters')
-      .select('user_id')
-      .eq('id', allocation.promoter_id)
-      .single(),
-    supabase
-      .from('brands')
-      .select('agency_id')
-      .eq('id', allocation.brand_id)
-      .single(),
-    supabase
-      .from('stores')
-      .select('agency_id')
-      .eq('id', allocation.store_id)
-      .single()
+    supabase.from('promoters').select('user_id').eq('id', allocation.promoter_id).single(),
+    supabase.from('brands').select('agency_id').eq('id', allocation.brand_id).single(),
+    supabase.from('stores').select('agency_id').eq('id', allocation.store_id).single()
   ]);
 
-  const promoter = promoterResult.data;
   const brand = brandResult.data;
   const store = storeResult.data;
-
-  if (!promoter || !userIds.includes(promoter.user_id) ||
-      !brand || brand.agency_id !== agencyId ||
-      !store || store.agency_id !== agencyId) {
+  if (!brand || !store) {
     throw new AppError('Allocation not found', 404);
+  }
+  if (req.user?.role !== 'system_admin') {
+    if (brand.agency_id !== req.agencyId || store.agency_id !== req.agencyId) {
+      throw new AppError('Forbidden', 403);
+    }
+    const promoter = promoterResult.data;
+    const { data: users } = await supabase.from('users').select('id').eq('agency_id', req.agencyId);
+    const userIds = (users || []).map((u: any) => u.id);
+    if (!promoter || !userIds.includes(promoter.user_id)) {
+      throw new AppError('Forbidden', 403);
+    }
   }
 
   // Prepare update data
@@ -412,19 +404,6 @@ export async function updateAllocation(req: AuthRequest, res: Response) {
 
 export async function deleteAllocation(req: AuthRequest, res: Response) {
   const { id } = req.params;
-  const agencyId = req.agencyId!;
-
-  // Verify allocation belongs to agency
-  const { data: users } = await supabase
-    .from('users')
-    .select('id')
-    .eq('agency_id', agencyId);
-
-  if (!users || users.length === 0) {
-    throw new AppError('Allocation not found', 404);
-  }
-
-  const userIds = users.map(u => u.id);
 
   const { data: allocation } = await supabase
     .from('promoter_allocations')
@@ -436,33 +415,27 @@ export async function deleteAllocation(req: AuthRequest, res: Response) {
     throw new AppError('Allocation not found', 404);
   }
 
-  // Verify agency ownership
   const [promoterResult, brandResult, storeResult] = await Promise.all([
-    supabase
-      .from('promoters')
-      .select('user_id')
-      .eq('id', allocation.promoter_id)
-      .single(),
-    supabase
-      .from('brands')
-      .select('agency_id')
-      .eq('id', allocation.brand_id)
-      .single(),
-    supabase
-      .from('stores')
-      .select('agency_id')
-      .eq('id', allocation.store_id)
-      .single()
+    supabase.from('promoters').select('user_id').eq('id', allocation.promoter_id).single(),
+    supabase.from('brands').select('agency_id').eq('id', allocation.brand_id).single(),
+    supabase.from('stores').select('agency_id').eq('id', allocation.store_id).single()
   ]);
 
   const promoter = promoterResult.data;
   const brand = brandResult.data;
   const store = storeResult.data;
-
-  if (!promoter || !userIds.includes(promoter.user_id) ||
-      !brand || brand.agency_id !== agencyId ||
-      !store || store.agency_id !== agencyId) {
+  if (!brand || !store) {
     throw new AppError('Allocation not found', 404);
+  }
+  if (req.user?.role !== 'system_admin') {
+    if (brand.agency_id !== req.agencyId || store.agency_id !== req.agencyId) {
+      throw new AppError('Forbidden', 403);
+    }
+    const { data: users } = await supabase.from('users').select('id').eq('agency_id', req.agencyId);
+    const userIds = (users || []).map((u: any) => u.id);
+    if (!promoter || !userIds.includes(promoter.user_id)) {
+      throw new AppError('Forbidden', 403);
+    }
   }
 
   const { error } = await supabase
@@ -479,10 +452,9 @@ export async function deleteAllocation(req: AuthRequest, res: Response) {
 
 export async function getSuggestions(req: AuthRequest, res: Response) {
   const { promoterId, brandId, storeId } = req.params;
-  const agencyId = req.agencyId!;
+  const agencyId = getAllocationAgencyId(req);
   const frequencyPerWeek = parseInt(req.query.frequency as string) || 1;
 
-  // Verify all entities belong to agency
   const { data: users } = await supabase
     .from('users')
     .select('id')
@@ -492,9 +464,8 @@ export async function getSuggestions(req: AuthRequest, res: Response) {
     throw new AppError('Invalid agency', 400);
   }
 
-  const userIds = users.map(u => u.id);
+  const userIds = users.map((u: any) => u.id);
 
-  // Verify promoter
   const { data: promoter } = await supabase
     .from('promoters')
     .select('user_id')
@@ -505,7 +476,6 @@ export async function getSuggestions(req: AuthRequest, res: Response) {
     throw new AppError('Promoter not found', 404);
   }
 
-  // Verify brand
   const { data: brand } = await supabase
     .from('brands')
     .select('agency_id')
@@ -516,7 +486,6 @@ export async function getSuggestions(req: AuthRequest, res: Response) {
     throw new AppError('Brand not found', 404);
   }
 
-  // Verify store
   const { data: store } = await supabase
     .from('stores')
     .select('agency_id')

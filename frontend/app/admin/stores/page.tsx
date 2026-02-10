@@ -12,7 +12,7 @@ const LocationPickerMap = dynamic(() => import("@/components/LocationPickerMap")
 const API_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:3001";
 
 export default function StoresPage() {
-  const { user, loading: authLoading } = useAuth();
+  const { user, loading: authLoading, effectiveAgencyId } = useAuth();
   const router = useRouter();
   const [stores, setStores] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,7 +36,7 @@ export default function StoresPage() {
   const [searchingCity, setSearchingCity] = useState(false);
 
   useEffect(() => {
-    if (!authLoading && (!user || user.role !== "agency_admin")) {
+    if (!authLoading && (!user || user.role === 'promoter')) {
       router.push("/admin/login");
     }
   }, [user, authLoading, router]);
@@ -45,12 +45,12 @@ export default function StoresPage() {
     if (user) {
       loadData();
     }
-  }, [user]);
+  }, [user, effectiveAgencyId]);
 
   async function loadData() {
     try {
       setLoading(true);
-      const storesData = await api.listStores();
+      const storesData = await api.listStores(effectiveAgencyId ?? undefined);
       setStores(storesData);
     } catch (error) {
       console.error("Failed to load stores:", error);
@@ -141,12 +141,13 @@ export default function StoresPage() {
 
     setSaving(true);
     try {
-      const submitData = {
+      const submitData: any = {
         ...formData,
         gps_latitude: parseFloat(formData.gps_latitude),
         gps_longitude: parseFloat(formData.gps_longitude),
         radius_meters: 200, // Sempre fixo em 200 metros
       };
+      if (effectiveAgencyId) submitData.agency_id = effectiveAgencyId;
 
       if (editing) {
         await api.updateStore(editing.id, submitData);
