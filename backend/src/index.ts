@@ -1,7 +1,6 @@
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
-import path from 'path';
 import authRoutes from './routes/auth.js';
 import agencyRoutes from './routes/agencies.js';
 import promoterRoutes from './routes/promoters.js';
@@ -18,10 +17,15 @@ dotenv.config();
 const app = express();
 const PORT = process.env.PORT || 3001;
 
+// Validate CORS origin in production
+if (process.env.NODE_ENV === 'production' && !process.env.FRONTEND_URL) {
+  console.warn('WARNING: FRONTEND_URL is not set in production. CORS will reject all cross-origin requests.');
+}
+
 // Middleware
 app.use(cors({
-  origin: process.env.NODE_ENV === 'production' 
-    ? process.env.FRONTEND_URL 
+  origin: process.env.NODE_ENV === 'production'
+    ? process.env.FRONTEND_URL || false
     : 'http://localhost:3000',
   credentials: true
 }));
@@ -29,18 +33,19 @@ app.use(cors({
 app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
-// Serve uploaded files
-const UPLOAD_DIR = process.env.UPLOAD_DIR || './uploads';
-app.use('/uploads', express.static(path.join(process.cwd(), UPLOAD_DIR)));
+// NOTE: Static /uploads route removed for security — uploaded files are served
+// via Supabase Storage with proper access controls. If local file serving is
+// needed, it must be placed behind the authenticate middleware.
 
 // Health check
 app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Database test endpoint
+// Database test endpoint (restricted to system_admin)
 import { testDatabase } from './controllers/test-db.js';
-app.get('/api/test-db', testDatabase);
+import { authenticate, requireRole } from './middleware/auth.js';
+app.get('/api/test-db', authenticate, requireRole(['system_admin']), testDatabase);
 
 // API Routes
 app.use('/api/auth', authRoutes);

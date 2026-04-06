@@ -30,9 +30,10 @@ export const authenticate = async (
     const decoded = jwt.verify(token, JWT_SECRET) as { userId: string; agencyId: string | null; role: string };
     
     // Fetch user from database to ensure they still exist
+    // NOTE: Only select non-sensitive fields — never return password_hash
     const { data: user, error } = await supabase
       .from('users')
-      .select('*')
+      .select('id, email, role, agency_id, created_at')
       .eq('id', decoded.userId)
       .single();
 

@@ -27,10 +27,22 @@ export async function listAllocations(req: AuthRequest, res: Response) {
 
   const userIds = users.map(u => u.id);
 
-  // Get all allocations
+  // Get promoter IDs that belong to this agency (filter at source, not after fetch)
+  const { data: agencyPromoters } = await supabase
+    .from('promoters')
+    .select('id')
+    .in('user_id', userIds);
+
+  const agencyPromoterIds = (agencyPromoters || []).map((p: any) => p.id);
+  if (agencyPromoterIds.length === 0) {
+    return res.json([]);
+  }
+
+  // Only fetch allocations for this agency's promoters
   const { data: allocations, error } = await supabase
     .from('promoter_allocations')
     .select('*')
+    .in('promoter_id', agencyPromoterIds)
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -41,7 +53,7 @@ export async function listAllocations(req: AuthRequest, res: Response) {
     return res.json([]);
   }
 
-  // Get promoter IDs from allocations
+  // Get related IDs from filtered allocations
   const promoterIds = [...new Set(allocations.map((a: any) => a.promoter_id))];
   const brandIds = [...new Set(allocations.map((a: any) => a.brand_id))];
   const storeIds = [...new Set(allocations.map((a: any) => a.store_id))];
@@ -69,22 +81,8 @@ export async function listAllocations(req: AuthRequest, res: Response) {
   const brandMap = new Map((brandsResult.data || []).map((b: any) => [b.id, b]));
   const storeMap = new Map((storesResult.data || []).map((s: any) => [s.id, s]));
 
-  // Filter allocations that belong to this agency
-  const filteredAllocations = allocations.filter((alloc: any) => {
-    const promoter = promoterMap.get(alloc.promoter_id);
-    const brand = brandMap.get(alloc.brand_id);
-    const store = storeMap.get(alloc.store_id);
-
-    // Check if promoter's user belongs to agency
-    if (!promoter || !userIds.includes(promoter.user_id)) return false;
-    if (!brand || brand.agency_id !== agencyId) return false;
-    if (!store || store.agency_id !== agencyId) return false;
-
-    return true;
-  });
-
-  // Format response
-  const formatted = filteredAllocations.map((alloc: any) => {
+  // Format response (allocations already filtered to this agency's promoters at DB level)
+  const formatted = allocations.map((alloc: any) => {
     const promoter = promoterMap.get(alloc.promoter_id);
     const brand = brandMap.get(alloc.brand_id);
     const store = storeMap.get(alloc.store_id);

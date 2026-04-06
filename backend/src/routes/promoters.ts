@@ -15,7 +15,7 @@ const router = express.Router();
 router.use(authenticate);
 
 // Promoter earnings (promoter only)
-router.get('/earnings/my', getMyEarnings);
+router.get('/earnings/my', requireRole(['promoter']), getMyEarnings);
 
 // Admin only routes
 router.get('/', requireRole(['agency', 'system_admin']), listPromoters);

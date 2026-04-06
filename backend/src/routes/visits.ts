@@ -14,8 +14,8 @@ const router = express.Router();
 router.use(authenticate);
 
 router.get('/', requireRole(['agency', 'system_admin']), listVisits);
-router.post('/', createVisit);
-router.get('/my-visits', getMyVisits);
+router.post('/', requireRole(['promoter']), createVisit);
+router.get('/my-visits', requireRole(['promoter']), getMyVisits);
 // More specific routes must come before generic :id routes
 router.put('/:visitId/products/:productId/photos', requireRole(['agency', 'system_admin']), updateVisitProductPhotos);
 router.get('/:id', requireRole(['agency', 'system_admin']), getVisit);

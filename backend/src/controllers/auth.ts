@@ -14,6 +14,10 @@ export async function register(req: Request<{}, {}, RegisterRequest>, res: Respo
     throw new AppError('Missing required fields', 400);
   }
 
+  if (password.length < 8) {
+    throw new AppError('Password must be at least 8 characters long', 400);
+  }
+
   // Check if user already exists
   const { data: existingUser } = await supabase
     .from('users')
@@ -125,5 +129,6 @@ export async function login(req: Request<{}, {}, LoginRequest>, res: Response) {
 
 export async function getMe(req: Request, res: Response) {
   const authReq = req as any;
-  res.json({ user: authReq.user });
+  const { id, email, role, agency_id, created_at } = authReq.user;
+  res.json({ user: { id, email, role, agency_id, created_at } });
 }

@@ -58,6 +58,10 @@ export async function createPromoter(req: AuthRequest, res: Response) {
     throw new AppError('Missing required fields', 400);
   }
 
+  if (password.length < 8) {
+    throw new AppError('Password must be at least 8 characters long', 400);
+  }
+
   // Check if user already exists
   const { data: existingUser } = await supabase
     .from('users')
